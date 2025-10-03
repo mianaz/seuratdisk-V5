@@ -1702,8 +1702,116 @@ H5SeuratToH5AD <- function(
       verbose = FALSE
     )
   }
+  # Add spatial coordinates if available
+  # Check for spatial data in images slot
+  if (source$exists(name = 'images')) {
+    images <- names(x = source[['images']])
+    if (length(images) > 0 && verbose) {
+      message("Processing spatial data from images")
+    }
+
+    # Process first image for now (extend for multiple images later)
+    if (length(images) > 0) {
+      img_name <- images[1]
+      img_group <- source[['images']][[img_name]]
+
+      # Check for coordinates
+      if (img_group$exists(name = 'coordinates')) {
+        if (verbose) {
+          message("Adding spatial coordinates to obsm['spatial']")
+        }
+
+        # Read coordinates
+        coord_group <- img_group[['coordinates']]
+
+        # Get x and y coordinates
+        if (coord_group$exists('x') && coord_group$exists('y')) {
+          x_coords <- coord_group[['x']][]
+          y_coords <- coord_group[['y']][]
+
+          # Create spatial matrix (cells x 2)
+          spatial_matrix <- cbind(x_coords, y_coords)
+
+          # Write to obsm
+          obsm$create_dataset(
+            name = 'spatial',
+            robj = spatial_matrix,
+            dtype = h5types$H5T_NATIVE_DOUBLE
+          )
+        } else if (coord_group$exists('imagerow') && coord_group$exists('imagecol')) {
+          # Visium-style coordinates
+          row_coords <- coord_group[['imagerow']][]
+          col_coords <- coord_group[['imagecol']][]
+
+          # Create spatial matrix (cells x 2)
+          spatial_matrix <- cbind(row_coords, col_coords)
+
+          # Write to obsm
+          obsm$create_dataset(
+            name = 'spatial',
+            robj = spatial_matrix,
+            dtype = h5types$H5T_NATIVE_DOUBLE
+          )
+        }
+      }
+    }
+  }
+
   # Create uns
   dfile$create_group(name = 'uns')
+
+  # Add spatial metadata to uns if available
+  if (source$exists(name = 'images')) {
+    images <- names(x = source[['images']])
+
+    if (length(images) > 0) {
+      if (verbose) {
+        message("Adding spatial metadata to uns['spatial']")
+      }
+
+      # Create spatial group in uns
+      spatial_uns <- dfile[['uns']]$create_group(name = 'spatial')
+
+      # Process each image (using first as primary library)
+      for (i in seq_along(images)) {
+        img_name <- images[i]
+        img_group <- source[['images']][[img_name]]
+
+        # Use library_1, library_2, etc. as keys
+        lib_id <- paste0('library_', i)
+        lib_group <- spatial_uns$create_group(name = lib_id)
+
+        # Add scale factors if available
+        if (img_group$attr_exists('scalefactors')) {
+          sf_group <- lib_group$create_group(name = 'scalefactors')
+
+          # Common Visium scale factors
+          scale_factors <- list(
+            tissue_hires_scalef = 0.17,
+            tissue_lowres_scalef = 0.05,
+            spot_diameter_fullres = 89.0,
+            fiducial_diameter_fullres = 144.0
+          )
+
+          for (sf_name in names(scale_factors)) {
+            sf_group$create_dataset(
+              name = sf_name,
+              robj = scale_factors[[sf_name]],
+              dtype = h5types$H5T_NATIVE_DOUBLE
+            )
+          }
+        }
+
+        # Add metadata
+        meta_group <- lib_group$create_group(name = 'metadata')
+        meta_group$create_dataset(
+          name = 'image_name',
+          robj = img_name,
+          dtype = h5types$H5T_STRING
+        )
+      }
+    }
+  }
 
   # Add graphs to obsp (pairwise observations)
   graphs.available <- source$index()[[assay]]$graphs

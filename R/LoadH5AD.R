@@ -386,6 +386,60 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
     }
   }
 
+  # 12. Add spatial data support
+  # Check for spatial coordinates in obsm
+  if (h5ad$exists("obsm") && "spatial" %in% names(h5ad[["obsm"]])) {
+    if (verbose) message("Processing spatial data...")
+
+    # Read spatial coordinates
+    spatial_coords <- h5ad[["obsm"]][["spatial"]][,]
+
+    # Ensure coordinates have proper cell names
+    if (nrow(spatial_coords) == length(cell.names)) {
+      rownames(spatial_coords) <- cell.names
+      colnames(spatial_coords) <- c("x", "y")
+
+      # Store in metadata for now (will be converted to proper spatial object later)
+      seurat_obj@meta.data$spatial_x <- spatial_coords[, 1]
+      seurat_obj@meta.data$spatial_y <- spatial_coords[, 2]
+
+      if (verbose) message("  Added spatial coordinates for ", nrow(spatial_coords), " cells")
+    }
+  }
+
+  # Check for Visium-specific spatial data in uns
+  if (h5ad$exists("uns") && "spatial" %in% names(h5ad[["uns"]])) {
+    if (verbose) message("Processing Visium spatial metadata...")
+
+    spatial_uns <- h5ad[["uns/spatial"]]
+    library_ids <- names(spatial_uns)
+
+    for (lib_id in library_ids) {
+      if (verbose) message("  Processing library: ", lib_id)
+
+      lib_group <- spatial_uns[[lib_id]]
+
+      # Store scale factors if present
+      if ("scalefactors" %in% names(lib_group)) {
+        scale_factors <- list()
+        sf_group <- lib_group[["scalefactors"]]
+
+        for (sf_name in names(sf_group)) {
+          scale_factors[[sf_name]] <- sf_group[[sf_name]][]
+        }
+
+        seurat_obj@misc[[paste0("spatial_", lib_id, "_scalefactors")]] <- scale_factors
+        if (verbose) message("    Added scale factors")
+      }
+
+      # Note image presence (actual image loading would require additional processing)
+      if ("images" %in% names(lib_group)) {
+        seurat_obj@misc[[paste0("spatial_", lib_id, "_has_images")]] <- TRUE
+        if (verbose) message("    Images detected (stored separately)")
+      }
+    }
+  }
+
   if (verbose) {
     message("\nSuccessfully loaded H5AD file")
     message("  Cells: ", ncol(seurat_obj))
