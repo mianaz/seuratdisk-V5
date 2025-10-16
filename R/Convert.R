@@ -480,6 +480,13 @@ H5ADToH5Seurat <- function(
         meta.scaled <- names(x = source[['var']])
         meta.scaled <- meta.scaled[!meta.scaled %in% c('__categories', scaled.dset)]
         for (mf in meta.scaled) {
+          # Skip if not a dataset (e.g., skip groups like feature_types, genome)
+          if (!inherits(x = source[['var']][[mf]], what = 'H5D')) {
+            if (verbose) {
+              message("Skipping ", mf, " (not a dataset)")
+            }
+            next
+          }
           if (!mf %in% names(x = assay.group[['meta.features']])) {
             if (verbose) {
               message("Adding ", mf, " from scaled feature-level metadata")
@@ -552,6 +559,35 @@ H5ADToH5Seurat <- function(
       src_name = 'obs',
       dst_name = 'meta.data'
     )
+    # Normalize h5ad categorical format (categories/codes) to SeuratDisk format (levels/values)
+    NormalizeH5ADCategorical <- function(dfgroup) {
+      for (col_name in names(dfgroup)) {
+        col_obj <- dfgroup[[col_name]]
+        # Check if this is an h5ad categorical group (has 'categories' and 'codes')
+        if (inherits(col_obj, 'H5Group') &&
+            all(c('categories', 'codes') %in% names(col_obj))) {
+          # Rename 'categories' to 'levels'
+          if (!col_obj$exists('levels')) {
+            col_obj$obj_copy_from(
+              src_loc = col_obj,
+              src_name = 'categories',
+              dst_name = 'levels'
+            )
+            col_obj$link_delete(name = 'categories')
+          }
+          # Rename 'codes' to 'values'
+          if (!col_obj$exists('values')) {
+            col_obj$obj_copy_from(
+              src_loc = col_obj,
+              src_name = 'codes',
+              dst_name = 'values'
+            )
+            col_obj$link_delete(name = 'codes')
+          }
+        }
+      }
+    }
+    NormalizeH5ADCategorical(dfgroup = dfile[['meta.data']])
     ColToFactor(dfgroup = dfile[['meta.data']])
     # if (dfile[['meta.data']]$attr_exists(attr_name = 'column-order')) {
     if (isTRUE(x = AttrExists(x = dfile[['meta.data']], name = 'column-order'))) {
@@ -1281,10 +1317,27 @@ H5SeuratToH5AD <- function(
   }
 
   AddEncoding(dname = 'X')
+  # Get number of features based on structure
+  if (has_layers && assay.group$exists(name = 'meta.data/_index')) {
+    # V5 structure: get count from meta.data/_index
+    n_features <- length(SafeH5DRead(assay.group[['meta.data/_index']]))
+  } else {
+    # Legacy structure: use features dims
+    n_features <- prod(assay.group[['features']]$dims)
+  }
+
   x.features <- switch(
     EXPR = x.data,
-    'scale.data' = which(x = SafeH5DRead(assay.group[['features']]) %in% SafeH5DRead(assay.group[['scaled.features']])),
-    seq.default(from = 1, to = prod(assay.group[['features']]$dims))
+    'scale.data' = {
+      if (has_layers && assay.group$exists(name = 'meta.data/_index')) {
+        # V5: match meta.data/_index against scaled.features
+        which(x = SafeH5DRead(assay.group[['meta.data/_index']]) %in% SafeH5DRead(assay.group[['scaled.features']]))
+      } else {
+        # Legacy: match features against scaled.features
+        which(x = SafeH5DRead(assay.group[['features']]) %in% SafeH5DRead(assay.group[['scaled.features']]))
+      }
+    },
+    seq.default(from = 1, to = n_features)
   )
   # Add meta.features with validation
   if (assay.group$exists(name = 'meta.features')) {
@@ -1306,7 +1359,14 @@ H5SeuratToH5AD <- function(
   if (Exists(x = dfile[['var']], name = rownames)) {
     dfile[['var']]$link_delete(name = rownames)
   }
-  features_data <- SafeH5DRead(assay.group[['features']])
+  # Get feature names from correct location based on structure
+  if (has_layers && assay.group$exists(name = 'meta.data/_index')) {
+    # V5 structure: feature names are in meta.data/_index
+    features_data <- SafeH5DRead(assay.group[['meta.data/_index']])
+  } else {
+    # Legacy structure: feature names are in features dataset
+    features_data <- SafeH5DRead(assay.group[['features']])
+  }
   # Ensure features are character strings
   features_subset <- as.character(features_data[x.features])
   dfile[['var']]$create_dataset(
@@ -1477,7 +1537,14 @@ H5SeuratToH5AD <- function(
     if (Exists(x = dfile[['raw/var']], name = rownames)) {
       dfile[['raw/var']]$link_delete(name = rownames)
     }
-    features_data_raw <- SafeH5DRead(assay.group[['features']])
+    # Get feature names from correct location based on structure
+    if (has_layers && assay.group$exists(name = 'meta.data/_index')) {
+      # V5 structure: feature names are in meta.data/_index
+      features_data_raw <- SafeH5DRead(assay.group[['meta.data/_index']])
+    } else {
+      # Legacy structure: feature names are in features dataset
+      features_data_raw <- SafeH5DRead(assay.group[['features']])
+    }
     dfile[['raw/var']]$create_dataset(
       name = rownames,
       robj = features_data_raw,
@@ -1665,16 +1732,25 @@ H5SeuratToH5AD <- function(
       # Because apparently AnnData requires nPCs == nrow(X)
       if (reduc.features < x.features) {
         pad <- paste0('pad_', varm.name)
+        # Get feature indices and filter out NAs
+        feature_indices <- match(
+          x = SafeH5DRead(source[['reductions']][[reduc]][['features']]),
+          table = SafeH5DRead(dfile[['var']][[rownames]])
+        )
+        # Replace NA values with new rows (append to end)
+        na_indices <- which(is.na(feature_indices))
+        if (length(na_indices) > 0) {
+          # For NA indices, assign new row positions at the end
+          feature_indices[na_indices] <- (reduc.features + 1L):(reduc.features + length(na_indices))
+        }
+
         PadMatrix(
           src = loadings,
           dest = dfile[['varm']],
           dname = pad,
           dims = c(x.features, loadings$dims[2]),
           index = list(
-            match(
-              x = SafeH5DRead(source[['reductions']][[reduc]][['features']]),
-              table = SafeH5DRead(dfile[['var']][[rownames]])
-            ),
+            feature_indices,
             seq.default(from = 1, to = loadings$dims[2])
           )
         )

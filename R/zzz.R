@@ -520,7 +520,7 @@ GetParent <- function(x) {
 #'
 #' @return An object of class \code{\link[hdf5r]{H5T}}
 #'
-#' @importFrom hdf5r guess_dtype
+#' @importFrom hdf5r guess_dtype h5types h5const H5T_STRING
 #'
 #' @seealso \code{\link[hdf5r]{guess_dtype}} \code{\link{BoolToInt}}
 #' \code{\link{StringType}}
@@ -546,7 +546,29 @@ GetParent <- function(x) {
 #' }
 #'
 GuessDType <- function(x, stype = 'utf8', ...) {
-  dtype <- guess_dtype(x = x, ...)
+  tryCatch({
+    dtype <- guess_dtype(x = x, ...)
+  }, error = function(e) {
+    # Fallback for types that guess_dtype can't handle
+    # Try to infer type from x
+    if (is.integer(x)) {
+      dtype <<- h5types$H5T_NATIVE_INT32
+    } else if (is.numeric(x)) {
+      dtype <<- h5types$H5T_NATIVE_DOUBLE
+    } else if (is.character(x)) {
+      dtype <<- H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+    } else if (is.logical(x)) {
+      dtype <<- h5types$H5T_NATIVE_INT32
+    } else {
+      # Last resort - try with as.character
+      tryCatch({
+        dtype <<- guess_dtype(x = as.character(x), ...)
+      }, error = function(e2) {
+        stop("Cannot determine HDF5 datatype for object: ", e$message)
+      })
+    }
+  })
+
   if (inherits(x = dtype, what = 'H5T_STRING')) {
     # For string types, use the existing dtype or create new one
     if (stype == 'utf8') {

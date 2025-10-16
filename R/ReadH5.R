@@ -129,6 +129,9 @@ as.data.frame.H5Group <- function(x, row.names = NULL, optional = FALSE, ...) {
           values <- as.integer(x = x[[i]][['values']][])
           levels <- x[[i]][['levels']][]
 
+          # Convert 0-based indices (h5ad format) to 1-based indices (R format)
+          values <- values + 1L
+
           if (!is.null(x = idx)) {
             values <- values[order(idx)]
           }

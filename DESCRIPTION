@@ -67,6 +67,9 @@ Collate:
     'V5Compatibility.R'
     'V5LayerSupport.R'
     'h5Seurat_bindings.R'
+    'SpatialConversion.R'
+    'SpatialFOV.R'
+    'LoadSpatialDemoData.R'
 Suggests:
     httr,
     knitr,
