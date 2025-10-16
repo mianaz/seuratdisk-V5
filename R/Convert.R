@@ -1160,24 +1160,23 @@ H5SeuratToH5AD <- function(
 
       # Add shape attribute for sparse matrices (required by anndata)
       if (dfile[[dname]]$exists(name = 'indptr') &&
-          dfile[[dname]]$exists(name = 'indices') &&
-          !dfile[[dname]]$attr_exists(attr_name = 'shape')) {
+          dfile[[dname]]$exists(name = 'indices')) {
         # For CSR matrix: nrows = length(indptr) - 1
-        # Use prod() to handle multi-dimensional dims arrays
         indptr_len <- prod(dfile[[dname]][['indptr']]$dims)
         nrows <- as.integer(indptr_len - 1L)
 
         # Get ncols from max index + 1 (most reliable for sparse matrices)
-        # Read all indices and find max
         all_indices <- dfile[[dname]][['indices']][]
         ncols <- if (length(all_indices) > 0) {
           as.integer(max(all_indices) + 1L)
         } else {
-          # Empty matrix
           0L
         }
 
         shape <- c(nrows, ncols)
+        if (dfile[[dname]]$attr_exists(attr_name = 'shape')) {
+          dfile[[dname]]$attr_delete(attr_name = 'shape')
+        }
         dfile[[dname]]$create_attr(
           attr_name = 'shape',
           robj = shape,
@@ -1705,6 +1704,7 @@ H5SeuratToH5AD <- function(
   # Add spatial coordinates if available
   # Check for spatial data in images slot
   if (source$exists(name = 'images')) {
+    cell_names <- SafeH5DRead(source[['cell.names']])
     images <- names(x = source[['images']])
     if (length(images) > 0 && verbose) {
       message("Processing spatial data from images")
@@ -1716,6 +1716,7 @@ H5SeuratToH5AD <- function(
       img_group <- source[['images']][[img_name]]
 
       # Check for coordinates
+      spatial_matrix <- NULL
       if (img_group$exists(name = 'coordinates')) {
         if (verbose) {
           message("Adding spatial coordinates to obsm['spatial']")
@@ -1730,14 +1731,7 @@ H5SeuratToH5AD <- function(
           y_coords <- coord_group[['y']][]
 
           # Create spatial matrix (cells x 2)
-          spatial_matrix <- cbind(x_coords, y_coords)
-
-          # Write to obsm
-          obsm$create_dataset(
-            name = 'spatial',
-            robj = spatial_matrix,
-            dtype = h5types$H5T_NATIVE_DOUBLE
-          )
+          spatial_matrix <- cbind(y_coords, x_coords)
         } else if (coord_group$exists('imagerow') && coord_group$exists('imagecol')) {
           # Visium-style coordinates
           row_coords <- coord_group[['imagerow']][]
@@ -1745,14 +1739,55 @@ H5SeuratToH5AD <- function(
 
           # Create spatial matrix (cells x 2)
           spatial_matrix <- cbind(row_coords, col_coords)
-
-          # Write to obsm
-          obsm$create_dataset(
-            name = 'spatial',
-            robj = spatial_matrix,
-            dtype = h5types$H5T_NATIVE_DOUBLE
-          )
         }
+      } else if (img_group$exists(name = 'boundaries') &&
+                 img_group[['boundaries']]$exists(name = 'centroids')) {
+        centroid_group <- img_group[['boundaries/centroids']]
+        if (centroid_group$exists(name = 'coords')) {
+          coords_mat <- centroid_group[['coords']]$read()
+          row_index <- seq_len(nrow(coords_mat))
+          if (centroid_group$exists(name = 'cells')) {
+            centroid_cells <- centroid_group[['cells']][]
+            if (!is.null(cell_names)) {
+              matched <- match(cell_names, centroid_cells)
+              if (any(is.na(matched))) {
+                warning("Unable to align all centroid coordinates with cell names")
+              } else {
+                row_index <- matched
+              }
+            }
+          }
+          coords_mat <- coords_mat[row_index, , drop = FALSE]
+          spatial_matrix <- cbind(coords_mat[, 2], coords_mat[, 1])
+        }
+      }
+      if (!is.null(spatial_matrix)) {
+        spatial_matrix <- as.matrix(spatial_matrix)
+        storage.mode(spatial_matrix) <- 'double'
+        obsm$create_dataset(
+          name = 'spatial',
+          robj = spatial_matrix,
+          dtype = h5types$H5T_NATIVE_DOUBLE
+        )
+        Transpose(
+          x = obsm[['spatial']],
+          dest = obsm,
+          dname = 'spatial',
+          overwrite = TRUE,
+          verbose = FALSE
+        )
+        obsm[['spatial']]$create_attr(
+          attr_name = 'encoding-type',
+          robj = 'array',
+          dtype = GuessDType(x = 'array'),
+          space = Scalar()
+        )
+        obsm[['spatial']]$create_attr(
+          attr_name = 'encoding-version',
+          robj = '0.2.0',
+          dtype = GuessDType(x = '0.2.0'),
+          space = Scalar()
+        )
       }
     }
   }
@@ -1782,22 +1817,27 @@ H5SeuratToH5AD <- function(
         lib_group <- spatial_uns$create_group(name = lib_id)
 
         # Add scale factors if available
-        if (img_group$attr_exists('scalefactors')) {
+        if (img_group$exists(name = 'scale.factors')) {
           sf_group <- lib_group$create_group(name = 'scalefactors')
-
-          # Common Visium scale factors
-          scale_factors <- list(
-            tissue_hires_scalef = 0.17,
-            tissue_lowres_scalef = 0.05,
-            spot_diameter_fullres = 89.0,
-            fiducial_diameter_fullres = 144.0
+          sf_src <- img_group[['scale.factors']]
+          sf_map <- c(
+            hires = 'tissue_hires_scalef',
+            lowres = 'tissue_lowres_scalef',
+            spot = 'spot_diameter_fullres',
+            fiducial = 'fiducial_diameter_fullres'
           )
-
-          for (sf_name in names(scale_factors)) {
+          for (sf_name in sf_src$names) {
+            dst_name <- sf_map[[sf_name]]
+            if (is.null(dst_name)) {
+              dst_name <- sf_name
+            }
+            sf_value <- sf_src[[sf_name]][]
             sf_group$create_dataset(
-              name = sf_name,
-              robj = scale_factors[[sf_name]],
-              dtype = h5types$H5T_NATIVE_DOUBLE
+              name = dst_name,
+              robj = sf_value,
+              dtype = h5types$H5T_NATIVE_DOUBLE,
+              space = Scalar(),
+              chunk_dims = NULL
             )
           }
         }
@@ -1806,9 +1846,22 @@ H5SeuratToH5AD <- function(
         meta_group <- lib_group$create_group(name = 'metadata')
         meta_group$create_dataset(
           name = 'image_name',
-          robj = img_name,
-          dtype = h5types$H5T_STRING
+          robj = img_name
         )
+
+        # Add images if available
+        if (img_group$exists(name = 'image')) {
+          images_group <- lib_group$create_group(name = 'images')
+          img_data <- img_group[['image']]$read()
+          if (length(dim(img_data)) == 3L) {
+            img_arr <- aperm(img_data, c(3L, 2L, 1L))
+            images_group$create_dataset(
+              name = 'lowres',
+              robj = img_arr,
+              dtype = h5types$H5T_NATIVE_DOUBLE
+            )
+          }
+        }
       }
     }
   }
@@ -2147,4 +2200,3 @@ readH5AD_obsm <-  function(file) {
   hfile$close_all()
   return(obsm.list)
 }
-

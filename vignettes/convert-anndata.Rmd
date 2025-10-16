@@ -25,7 +25,7 @@ outs <- c(
 file.remove(outs)
 ```
 
-This vignette showcases how to convert from `Seurat` object to AnnData files via an intermediate step thorugh h5Seurat files. This allows interoperability between Seurat and [Scanpy](https://scanpy.readthedocs.io/)
+This vignette showcases how to convert between `Seurat` objects, h5Seurat files, and AnnData h5ad files. The workflows below enable interoperability between Seurat and [Scanpy](https://scanpy.readthedocs.io/).
 
 ```{r packages}
 library(Seurat)
@@ -72,10 +72,32 @@ curl::curl_download(url, basename(url))
 To see how this dataset was created, please see [this script](https://gist.github.com/mojaveazure/922aa904b9ac212e627f522c2b816a52)
 
 
-Converting the AnnData file to a `Seurat` object is a two-step process. First, convert the AnnData file to an h5Seurat file using the [`Convert` function](https://mojaveazure.github.io/seurat-disk/reference/Convert.html); full details about the conversion process are listed in the [manual page](https://mojaveazure.github.io/seurat-disk/reference/Convert.html). Then, we [load the h5Seurat file](https://mojaveazure.github.io/seurat-disk/reference/LoadH5Seurat.html) into a `Seurat` object; for more details about loading `Seurat` objects from h5Seurat files, please see [this vignette](https://mojaveazure.github.io/seurat-disk/articles/h5Seurat-load.html)
+Historically, converting an AnnData file to a `Seurat` object was a two-step process: convert the AnnData file to h5Seurat with [`Convert`](https://mojaveazure.github.io/seurat-disk/reference/Convert.html), then [load the h5Seurat file](https://mojaveazure.github.io/seurat-disk/reference/LoadH5Seurat.html). That workflow continues to be supported and remains a convenient way to materialise an on-disk h5Seurat representation for repeated use.
 
 ```{r convert_adata}
 Convert("pbmc3k_final.h5ad", dest = "h5seurat", overwrite = TRUE)
 pbmc3k <- LoadH5Seurat("pbmc3k_final.h5seurat")
 pbmc3k
 ```
+
+### Direct `LoadH5AD`
+
+SeuratDisk now supports loading AnnData files directly into `Seurat` objects without producing an intermediate h5Seurat file. This is the recommended approach when you simply want to bring an AnnData analysis into Seurat.
+
+```{r load_direct}
+pbmc3k_direct <- LoadH5AD("pbmc3k_final.h5ad")
+pbmc3k_direct
+```
+
+Both workflows yield equivalent in-memory objects; choose the path that best matches your downstream needs.
+
+### Spatial datasets
+
+When an AnnData file contains 10x Genomics Visium information, `LoadH5AD` reconstructs the spatial images, scalefactors, and coordinates so that Seurat spatial tooling works out of the box.
+
+```{r load_visium, eval = FALSE}
+brain <- LoadH5AD("visium_brain.h5ad", assay.name = "Spatial")
+SpatialFeaturePlot(brain, features = "PTPRC", images = Images(brain)[1])
+```
+
+The call above expects that the AnnData file was exported by Scanpy (or similar) with the `uns['spatial']` hierarchy intact. After loading, standard Seurat spatial workflows—such as `SpatialFeaturePlot`, `Images`, and `GetTissueCoordinates`—operate as if the data originated in Seurat.

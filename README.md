@@ -13,6 +13,7 @@ SeuratDisk provides interfaces for HDF5-based single cell file formats, enabling
 - **Seurat V5 Support**: Native handling of Seurat V5 Assay5 objects and layered data structures
 - **Format Conversion**: Bidirectional conversion between Seurat, h5Seurat, and h5ad formats
 - **Direct h5ad Loading**: Load AnnData h5ad files directly into Seurat without intermediate conversion
+- **Spatial Visium Support**: Automatically rebuilds Visium spatial images, scalefactors, and coordinates when reading h5ad files
 - **Metadata Preservation**: Complete transfer of cell/gene metadata, dimensional reductions, and graphs
 - **Modern AnnData Compatibility**: Supports anndata 0.8+ categorical encoding and structure
 
@@ -58,6 +59,21 @@ seurat_obj <- LoadH5AD("scanpy_output.h5ad")
 Convert("data.h5ad", dest = "data.h5Seurat")
 ```
 
+### Spatial Transcriptomics
+
+```r
+# Load a Visium h5ad created with scanpy
+brain <- LoadH5AD("visium_brain.h5ad", assay.name = "Spatial")
+
+# Inspect reconstructed spatial images
+Images(brain)
+
+# Plot a gene straight away
+SpatialFeaturePlot(brain, features = "PTPRC", images = Images(brain)[1])
+```
+
+When present, low- and high-resolution Visium images, scalefactors, and spot coordinates are restored directly from the AnnData file, enabling immediate use of standard Seurat spatial workflows.
+
 ### Layer Handling
 
 Seurat V5 supports multiple data layers per assay (counts, data, scale.data). These are mapped as follows:
@@ -95,6 +111,7 @@ Seurat V5 supports multiple data layers per assay (counts, data, scale.data). Th
 - Proper encoding attributes for anndata 0.8+ compatibility
 - Complete metadata group structure (`obsm`, `obsp`, `varm`, `varp`, `layers`, `uns`)
 - Correct `shape` attributes for sparse matrices
+- Visium spatial libraries are reconstructed into fully functional `VisiumV2` images inside Seurat
 
 ### Bug Fixes
 - Fixed V5 metadata transfer issues
@@ -105,7 +122,7 @@ Seurat V5 supports multiple data layers per assay (counts, data, scale.data). Th
 
 - Round-trip conversions (h5Seurat ↔ Seurat ↔ h5Seurat) may lose some V5-specific metadata
 - Multi-modal assays with different feature dimensions have limited support
-- Spatial transcriptomics data preservation is basic
+- Visium hires imagery is embedded inside the Seurat object; raw TIFF/PNG assets are not exported automatically
 - Large datasets (>100K cells) may require substantial memory
 
 ## Troubleshooting
