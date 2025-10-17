@@ -131,6 +131,23 @@ SaveH5MU <- function(object,
         modality.names[assay] <- default_mapping[assay]
       }
     }
+
+    # Validate user-provided modality names for duplicates
+    modality_counts <- table(modality.names)
+    duplicates <- names(modality_counts)[modality_counts > 1]
+    if (length(duplicates) > 0) {
+      conflicting_assays <- lapply(duplicates, function(dup) {
+        names(modality.names)[modality.names == dup]
+      })
+      stop(
+        "Duplicate modality names detected:\n",
+        paste(sapply(seq_along(duplicates), function(i) {
+          paste0("  '", duplicates[i], "': ", paste(conflicting_assays[[i]], collapse = ", "))
+        }), collapse = "\n"),
+        "\nEach assay must map to a unique modality name.",
+        call. = FALSE
+      )
+    }
   }
 
   # Validate object for multimodal export
@@ -217,7 +234,7 @@ GetDefaultAssayToModalityMapping <- function(assays) {
     ATAC = "atac",
     Spatial = "spatial",
     HTO = "hto",
-    SCT = "rna",  # SCTransform still maps to rna modality
+    SCT = "rna",  # SCTransform maps to rna by default
     Protein = "prot",
     Peaks = "atac"
   )
@@ -226,6 +243,42 @@ GetDefaultAssayToModalityMapping <- function(assays) {
   for (assay in assays) {
     if (assay %in% names(default_map)) {
       mapping[assay] <- default_map[assay]
+    }
+  }
+
+  # Detect and resolve conflicts (e.g., both RNA and SCT mapping to "rna")
+  modality_counts <- table(mapping)
+  conflicts <- names(modality_counts)[modality_counts > 1]
+
+  if (length(conflicts) > 0) {
+    for (conflict in conflicts) {
+      # Find all assays mapping to this conflicting modality
+      conflicting_assays <- names(mapping)[mapping == conflict]
+
+      # Special handling for RNA/SCT conflict
+      if (conflict == "rna" && "SCT" %in% conflicting_assays && "RNA" %in% conflicting_assays) {
+        # Keep RNA as "rna", rename SCT to "sct"
+        mapping["SCT"] <- "sct"
+        message("Note: Both RNA and SCT assays detected. Mapping SCT → 'sct' modality to avoid conflict.")
+      } else if (conflict == "prot" && length(conflicting_assays) > 1) {
+        # Handle protein assay conflicts (ADT, Protein, etc.)
+        for (i in seq_along(conflicting_assays)) {
+          assay <- conflicting_assays[i]
+          if (i > 1) {  # Keep first as "prot", rename others
+            mapping[assay] <- paste0("prot_", tolower(assay))
+            message("Note: Multiple protein assays detected. Mapping ", assay, " → '", mapping[assay], "' to avoid conflict.")
+          }
+        }
+      } else {
+        # Generic conflict resolution: append assay name
+        for (i in seq_along(conflicting_assays)) {
+          assay <- conflicting_assays[i]
+          if (i > 1) {  # Keep first, rename others
+            mapping[assay] <- tolower(assay)
+            message("Note: Modality conflict detected. Mapping ", assay, " → '", mapping[assay], "'.")
+          }
+        }
+      }
     }
   }
 

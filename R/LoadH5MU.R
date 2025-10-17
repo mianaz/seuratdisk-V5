@@ -219,6 +219,7 @@ GetDefaultModalityMapping <- function(modalities) {
   # Standard mapping based on muon/MuData conventions
   default_map <- c(
     rna = "RNA",
+    sct = "SCT",      # SCTransform assay
     prot = "ADT",
     atac = "ATAC",
     spatial = "Spatial",
