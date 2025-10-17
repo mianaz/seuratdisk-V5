@@ -199,8 +199,7 @@ as.Seurat.loom <- function(
 #' @name LoomLoading
 #' @rdname LoomLoading
 #'
-#' @importFrom Seurat CreateAssayObject Key<- CreateSeuratObject SetAssayData
-#' as.Graph DefaultAssay<-
+#' @importFrom Seurat CreateAssayObject Key<- CreateSeuratObject SetAssayData as.Graph DefaultAssay<- CreateDimReducObject Loadings Loadings<- Stdev
 #'
 #' @details
 #' \code{LoadLoom} will try to automatically fill slots of a \code{Seurat}
@@ -224,7 +223,6 @@ LoadLoom0.1 <- function(
   filter = c('cells', 'features', 'all', 'none'),
   verbose = TRUE
 ) {
-  # TODO: implement filtering
   filter <- filter[1]
   filter <- match.arg(arg = filter)
   assay <- assay %||% suppressWarnings(expr = DefaultAssay(object = file)) %||% 'RNA'
@@ -251,7 +249,9 @@ LoadLoom0.1 <- function(
 #' @rdname LoomLoading
 #'
 #' @section Loom 3.0.0 Loading:
-#' blah
+#' For loom files version 3.0.0 and higher, \code{LoadLoom3.0} provides
+#' comprehensive loading with support for filtering, dimensional reductions,
+#' and cell graphs.
 #'
 LoadLoom3.0 <- function(
   file,
@@ -263,10 +263,35 @@ LoadLoom3.0 <- function(
   filter = c('cells', 'features', 'all', 'none'),
   verbose = TRUE
 ) {
-  # TODO: implement filtering
+  # Implement filtering
   filter <- filter[1]
   filter <- match.arg(arg = filter)
   assay <- assay %||% suppressWarnings(expr = DefaultAssay(object = file)) %||% 'RNA'
+
+  # Check for Valid filters
+  cells.valid <- NULL
+  features.valid <- NULL
+  if (filter != 'none') {
+    if (filter %in% c('cells', 'all')) {
+      valid.path <- H5Path('col_attrs', 'Valid')
+      if (Exists(x = file, name = valid.path)) {
+        cells.valid <- as.logical(file[[valid.path]][])
+        if (isTRUE(x = verbose)) {
+          message("Found cell filter, keeping ", sum(cells.valid), " of ", length(cells.valid), " cells")
+        }
+      }
+    }
+    if (filter %in% c('features', 'all')) {
+      valid.path <- H5Path('row_attrs', 'Valid')
+      if (Exists(x = file, name = valid.path)) {
+        features.valid <- as.logical(file[[valid.path]][])
+        if (isTRUE(x = verbose)) {
+          message("Found feature filter, keeping ", sum(features.valid), " of ", length(features.valid), " features")
+        }
+      }
+    }
+  }
+
   # Read in /matrix
   if (isTRUE(x = verbose)) {
     message("Reading in /matrix")
@@ -276,6 +301,17 @@ LoadLoom3.0 <- function(
     features = file[[features]][],
     cells = file[[cells]][]
   )
+
+  # Apply filtering
+  if (!is.null(x = features.valid)) {
+    counts <- counts[features.valid, , drop = FALSE]
+    dnames$features <- dnames$features[features.valid]
+  }
+  if (!is.null(x = cells.valid)) {
+    counts <- counts[, cells.valid, drop = FALSE]
+    dnames$cells <- dnames$cells[cells.valid]
+  }
+
   if (anyDuplicated(x = dnames$features)) {
     warning(
       "Duplicate feature names found, making unique",
@@ -286,7 +322,7 @@ LoadLoom3.0 <- function(
   }
   if (anyDuplicated(x = dnames$cells)) {
     warning(
-      "Duplicate feature names found, making unique",
+      "Duplicate cell names found, making unique",
       call. = FALSE,
       immediate. = TRUE
     )
@@ -316,6 +352,13 @@ LoadLoom3.0 <- function(
       message("Saving ", basename(path = normalized), " as data")
     }
     norm.data <- t(x = as.matrix(x = file[[normalized]]))
+    # Apply filtering to normalized data
+    if (!is.null(x = features.valid)) {
+      norm.data <- norm.data[features.valid, , drop = FALSE]
+    }
+    if (!is.null(x = cells.valid)) {
+      norm.data <- norm.data[, cells.valid, drop = FALSE]
+    }
     dimnames(x = norm.data) <- dnames
     object <- SetAssayData(
       object = object,
@@ -330,6 +373,13 @@ LoadLoom3.0 <- function(
       message("Saving ", basename(path = scaled), " as scaled data")
     }
     scaled.data <- t(x = as.matrix(x = file[[scaled]]))
+    # Apply filtering to scaled data
+    if (!is.null(x = features.valid)) {
+      scaled.data <- scaled.data[features.valid, , drop = FALSE]
+    }
+    if (!is.null(x = cells.valid)) {
+      scaled.data <- scaled.data[, cells.valid, drop = FALSE]
+    }
     dimnames(x = scaled.data) <- dnames
     object <- SetAssayData(
       object = object,
@@ -339,9 +389,13 @@ LoadLoom3.0 <- function(
     )
   }
   # Load in feature-level metadata
-  mf.remove <- c(basename(path = features))
+  mf.remove <- c(basename(path = features), 'Valid')
   meta.features <- as.data.frame(x = file[['row_attrs']])
   meta.features <- meta.features[, !colnames(x = meta.features) %in% mf.remove, drop = FALSE]
+  # Apply filtering to feature metadata
+  if (!is.null(x = features.valid)) {
+    meta.features <- meta.features[features.valid, , drop = FALSE]
+  }
   rownames(x = meta.features) <- dnames$features
   if (ncol(x = meta.features)) {
     object[[assay]] <- AddMetaData(
@@ -350,24 +404,80 @@ LoadLoom3.0 <- function(
     )
   }
   # Load in cell-level metadata
-  md.remove <- c(basename(path = cells))
+  md.remove <- c(basename(path = cells), 'Valid')
   meta.data <- as.data.frame(x = file[['col_attrs']])
   meta.data <- meta.data[, !colnames(x = meta.data) %in% md.remove, drop = FALSE]
+  # Apply filtering to cell metadata
+  if (!is.null(x = cells.valid)) {
+    meta.data <- meta.data[cells.valid, , drop = FALSE]
+  }
   rownames(x = meta.data) <- dnames$cells
   if (ncol(x = meta.data)) {
     object <- AddMetaData(object = object, metadata = meta.data)
   }
-  # TODO: Load in dimensional reductions?
-  # TODO: Load in cell graphs
+  # Load in dimensional reductions
+  # Loom files may store dimensional reductions in /col_attrs as 2D datasets
+  # We'll look for a '/reductions' group if it exists (non-standard extension)
+  if (Exists(x = file, name = 'reductions')) {
+    for (reduc.name in names(x = file[['reductions']])) {
+      tryCatch({
+        if (verbose) {
+          message("Loading dimensional reduction ", reduc.name)
+        }
+        reduc.group <- file[['reductions']][[reduc.name]]
+        # Read embeddings
+        if (Exists(x = reduc.group, name = 'embeddings')) {
+          embeddings <- t(x = as.matrix(x = reduc.group[['embeddings']]))
+          # Apply filtering
+          if (!is.null(x = cells.valid)) {
+            embeddings <- embeddings[cells.valid, , drop = FALSE]
+          }
+          rownames(x = embeddings) <- colnames(x = object)
+          # Create DimReduc object
+          reduc.obj <- CreateDimReducObject(
+            embeddings = embeddings,
+            key = paste0(reduc.name, '_'),
+            assay = assay
+          )
+          # Load additional data if available
+          if (Exists(x = reduc.group, name = 'loadings')) {
+            loadings <- as.matrix(x = reduc.group[['loadings']])
+            if (!is.null(x = features.valid)) {
+              # Only filter if loadings match feature count
+              if (nrow(loadings) == length(features.valid)) {
+                loadings <- loadings[features.valid, , drop = FALSE]
+              }
+            }
+            reduc.obj <- Loadings(object = reduc.obj) <- loadings
+          }
+          if (Exists(x = reduc.group, name = 'stdev')) {
+            Stdev(object = reduc.obj) <- reduc.group[['stdev']][]
+          }
+          object[[reduc.name]] <- reduc.obj
+        }
+      }, error = function(e) {
+        warning(
+          "Failed to load dimensional reduction ", reduc.name, ": ", e$message,
+          call. = FALSE,
+          immediate. = TRUE
+        )
+      })
+    }
+  }
+  # Load in cell graphs
   for (i in names(x = file[['col_graphs']])) {
     if (verbose) {
       message("Loading graph ", i)
-      graph <- LoadGraph(graph = file[['col_graphs']][[i]])
-      colnames(x = graph) <- rownames(x = graph) <- colnames(x = object)
-      graph <- as.Graph(x = graph)
-      DefaultAssay(object = graph) <- assay
-      object[[i]] <- graph
     }
+    graph <- LoadGraph(graph = file[['col_graphs']][[i]])
+    # Apply filtering to graphs
+    if (!is.null(x = cells.valid)) {
+      graph <- graph[cells.valid, cells.valid, drop = FALSE]
+    }
+    colnames(x = graph) <- rownames(x = graph) <- colnames(x = object)
+    graph <- as.Graph(x = graph)
+    DefaultAssay(object = graph) <- assay
+    object[[i]] <- graph
   }
   return(object)
 }

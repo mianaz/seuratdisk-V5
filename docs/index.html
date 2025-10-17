@@ -6,26 +6,21 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Interfaces for HDF5-Based Single Cell File Formats • SeuratDisk</title>
-<!-- jquery --><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js" integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo=" crossorigin="anonymous"></script><!-- Bootstrap --><link href="https://cdnjs.cloudflare.com/ajax/libs/bootswatch/3.4.0/flatly/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+<!-- jquery --><script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script><!-- Bootstrap --><link href="https://cdnjs.cloudflare.com/ajax/libs/bootswatch/3.4.0/flatly/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.4.1/js/bootstrap.min.js" integrity="sha256-nuL8/2cJ5NDSSwnKD8VqreErSWHtnEP9E7AySL+1ev4=" crossorigin="anonymous"></script><!-- bootstrap-toc --><link rel="stylesheet" href="bootstrap-toc.css">
 <script src="bootstrap-toc.js"></script><!-- Font Awesome icons --><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/all.min.css" integrity="sha256-mmgLkCYLUQbXn0B1SRqzHar6dCnv9oZFPEC1g1cwlkk=" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.1/css/v4-shims.min.css" integrity="sha256-wZjR52fzng1pJHwx4aV2AO3yyTOXrcDW7jBpJtTwVxw=" crossorigin="anonymous">
 <!-- clipboard.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.6/clipboard.min.js" integrity="sha256-inc5kl9MA1hkeYUt+EC3BhlIgyp/2jDIyBLS6k3UxPI=" crossorigin="anonymous"></script><!-- headroom.js --><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/headroom.min.js" integrity="sha256-AsUX4SJE1+yuDu5+mAVzJbuYNPHj/WroHuZ8Ir/CkE0=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/headroom/0.11.0/jQuery.headroom.min.js" integrity="sha256-ZX/yNShbjqsohH1k95liqY9Gd8uOiE1S4vZc+9KQ1K4=" crossorigin="anonymous"></script><!-- pkgdown --><link href="pkgdown.css" rel="stylesheet">
 <script src="pkgdown.js"></script><meta property="og:title" content="Interfaces for HDF5-Based Single Cell File Formats">
-<meta property="og:description" content="The h5Seurat file format is specifically designed for the storage
-  and analysis of multi-modal single-cell and spatially-resolved expression
-  experiments, for example, from CITE-seq or 10X Visium technologies. It holds
-  all molecular information and associated metadata, including (for example)
-  nearest-neighbor graphs, dimensional reduction information, spatial
-  coordinates and image data, and cluster labels. We also support rapid and
-  on-disk conversion between h5Seurat and AnnData objects, with the goal of
-  enhancing interoperability between Seurat and Scanpy.">
+<meta property="og:description" content="The h5Seurat file format is specifically designed for the storage and analysis of multi-modal single-cell and spatially-resolved expression experiments, for example, from CITE-seq or 10X Visium technologies. It holds all molecular information and associated metadata, including (for example) nearest-neighbor graphs, dimensional reduction information, spatial coordinates and image data, and cluster labels. We also support rapid and on-disk conversion between h5Seurat, AnnData, and MuData (h5mu) objects, with the goal of enhancing interoperability between Seurat, Scanpy, and Muon.">
 <!-- mathjax --><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js" integrity="sha256-nvJJv9wWKEm88qvoQl9ekL2J+k/RWIsaSScxxlsrv8k=" crossorigin="anonymous"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/config/TeX-AMS-MML_HTMLorMML.js" integrity="sha256-84DKXVJXs0/F8OTMzX4UR909+jtl4G7SPypPavF+GfA=" crossorigin="anonymous"></script><!--[if lt IE 9]>
 <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
 <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
 <![endif]-->
 </head>
 <body data-spy="scroll" data-target="#toc">
+
+
     <div class="container template-home">
       <header><div class="navbar navbar-default navbar-fixed-top" role="navigation">
   <div class="container">
@@ -38,25 +33,19 @@
       </button>
       <span class="navbar-brand">
         <a class="navbar-link" href="index.html">SeuratDisk</a>
-        <span class="version label label-danger" data-toggle="tooltip" data-placement="bottom" title="Unreleased version">0.0.0.9011</span>
+        <span class="version label label-default" data-toggle="tooltip" data-placement="bottom" title="Released version">0.1.0</span>
       </span>
     </div>
 
     <div id="navbar" class="navbar-collapse collapse">
       <ul class="nav navbar-nav">
 <li>
-  <a href="index.html">
-    <span class="fas fa fas fa-home fa-lg"></span>
-     
-  </a>
-</li>
-<li>
   <a href="reference/index.html">Reference</a>
 </li>
 <li class="dropdown">
-  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
     Articles
-     
+
     <span class="caret"></span>
   </a>
   <ul class="dropdown-menu" role="menu">
@@ -74,9 +63,9 @@
       </ul>
 <ul class="nav navbar-nav navbar-right">
 <li>
-  <a href="https://github.com/mojaveazure/seurat-disk/">
-    <span class="fab fa fab fa-github fa-lg"></span>
-     
+  <a href="https://github.com/mojaveazure/seurat-disk/" class="external-link">
+    <span class="fab fa-github fa-lg"></span>
+
   </a>
 </li>
       </ul>
@@ -87,141 +76,289 @@
 </div>
 <!--/.navbar -->
 
-      
+
 
       </header><div class="row">
   <div class="contents col-md-9">
-<div id="seuratdisk-v0-0-0-9011" class="section level1">
-<div class="page-header"><h1 class="hasAnchor">
-<a href="#seuratdisk-v0-0-0-9011" class="anchor"></a>SeuratDisk v0.0.0.9011</h1></div>
-<!-- badges: start -->
-
-<!-- Interfaces for HDF5-based Single Cell File Formats -->
-<p>The h5Seurat file format is specifically designed for the storage and analysis of multi-modal single-cell and spatially-resolved expression experiments, for example, from CITE-seq or 10X Visium technologies. It holds all molecular information and associated metadata, including (for example) nearest-neighbor graphs, dimensional reduction information, spatial coordinates and image data, and cluster labels. We also support rapid and on-disk conversion between h5Seurat and AnnData objects, with the goal of enhancing interoperability between Seurat and Scanpy.</p>
-<div id="installation" class="section level2">
-<h2 class="hasAnchor">
-<a href="#installation" class="anchor"></a>Installation</h2>
-<p>SeuratDisk is not currently available on CRAN. You can install it from <a href="https://github.com/mojaveazure/seurat-disk">GitHub</a> with:</p>
-<div class="sourceCode"><pre class="r"><span class="kw">if</span> (!<span class="fu"><a href="https://rdrr.io/r/base/ns-load.html">requireNamespace</a></span>(<span class="st">"remotes"</span>, <span class="kw">quietly</span> <span class="kw">=</span> <span class="fl">TRUE</span>)) {
-  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html">install.packages</a></span>(<span class="st">"remotes"</span>)
-}
-<span class="kw pkg">remotes</span><span class="kw ns">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html">install_github</a></span>(<span class="st">"mojaveazure/seurat-disk"</span>)</pre></div>
+<div class="section level1">
+<div class="page-header"><h1 id="seuratdisk-v5">SeuratDisk V5<a class="anchor" aria-label="anchor" href="#seuratdisk-v5"></a>
+</h1></div>
+<p><a href=""><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle"></a> <a href=""><img src="https://img.shields.io/badge/R-%3E%3D4.0-blue.svg" alt="R"></a> <a href=""><img src="https://img.shields.io/badge/Seurat-v5-green.svg" alt="Seurat"></a></p>
+<div class="section level2">
+<h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+</h2>
+<p>SeuratDisk provides interfaces for HDF5-based single cell file formats, enabling efficient storage and conversion between Seurat objects and AnnData/h5ad formats. This fork extends the original <a href="https://github.com/mojaveazure/seurat-disk" class="external-link">SeuratDisk package</a> with full Seurat V5 compatibility and improved interoperability with Python’s scanpy/anndata ecosystem.</p>
 </div>
-<div id="dependencies" class="section level2">
-<h2 class="hasAnchor">
-<a href="#dependencies" class="anchor"></a>Dependencies</h2>
-<p>SeuratDisk depends on the following non-standard packages:</p>
-<table class="table">
-<thead><tr class="header">
-<th align="center">Package</th>
-<th align="center">CRAN Webpage</th>
-<th align="center">Source</th>
-<th align="center">Website</th>
-</tr></thead>
-<tbody>
-<tr class="odd">
-<td align="center">cli</td>
-<td align="center"><a href="https://cran.r-project.org/package=cli">CRAN</a></td>
-<td align="center"><a href="https://github.com/r-lib/cli#readme">GitHub</a></td>
-<td align="center">–</td>
-</tr>
-<tr class="even">
-<td align="center">crayon</td>
-<td align="center"><a href="https://cran.r-project.org/package=crayon">CRAN</a></td>
-<td align="center"><a href="https://github.com/r-lib/crayon#readme">GitHub</a></td>
-<td align="center">–</td>
-</tr>
-<tr class="odd">
-<td align="center">hdf5r</td>
-<td align="center"><a href="https://cran.r-project.org/package=hdf5r">CRAN</a></td>
-<td align="center"><a href="https://github.com/hhoeflin/hdf5r">GitHub</a></td>
-<td align="center"><a href="https://hhoeflin.github.io/hdf5r">Website</a></td>
-</tr>
-<tr class="even">
-<td align="center">Matrix</td>
-<td align="center"><a href="https://cran.r-project.org/package=Matrix">CRAN</a></td>
-<td align="center">–</td>
-<td align="center"><a href="http://Matrix.R-forge.R-project.org/">Website</a></td>
-</tr>
-<tr class="odd">
-<td align="center">R6</td>
-<td align="center"><a href="https://cran.r-project.org/package=R6">CRAN</a></td>
-<td align="center"><a href="https://github.com/r-lib/R6/">GitHub</a></td>
-<td align="center"><a href="https://r6.r-lib.org">Website</a></td>
-</tr>
-<tr class="even">
-<td align="center">rlang</td>
-<td align="center"><a href="https://cran.r-project.org/package=rlang">CRAN</a></td>
-<td align="center"><a href="https://github.com/r-lib/rlang">GitHub</a></td>
-<td align="center"><a href="http://rlang.r-lib.org">Website</a></td>
-</tr>
-<tr class="odd">
-<td align="center">Seurat</td>
-<td align="center"><a href="https://cran.r-project.org/package=Seurat">CRAN</a></td>
-<td align="center"><a href="https://github.com/satijalab/seurat">GitHub</a></td>
-<td align="center"><a href="http://www.satijalab.org/seurat">Website</a></td>
-</tr>
-<tr class="even">
-<td align="center">withr</td>
-<td align="center"><a href="https://cran.r-project.org/package=withr">CRAN</a></td>
-<td align="center">–</td>
-<td align="center"><a href="http://withr.r-lib.org">Website</a></td>
-</tr>
-</tbody>
-</table>
+<div class="section level2">
+<h2 id="key-features">Key Features<a class="anchor" aria-label="anchor" href="#key-features"></a>
+</h2>
+<ul>
+<li>
+<strong>Seurat V5 Support</strong>: Native handling of Seurat V5 Assay5 objects and layered data structures</li>
+<li>
+<strong>Format Conversion</strong>: Bidirectional conversion between Seurat, h5Seurat, h5ad, and h5mu formats</li>
+<li>
+<strong>Multimodal Data Support</strong>: Full h5mu (MuData) format support for CITE-seq, multiome, and other multimodal datasets</li>
+<li>
+<strong>Direct h5ad Loading</strong>: Load AnnData h5ad files directly into Seurat without intermediate conversion</li>
+<li>
+<strong>Spatial Visium Support</strong>: Automatically rebuilds Visium spatial images, scalefactors, and coordinates when reading h5ad files</li>
+<li>
+<strong>Metadata Preservation</strong>: Complete transfer of cell/gene metadata, dimensional reductions, and graphs</li>
+<li>
+<strong>Modern AnnData Compatibility</strong>: Supports anndata 0.8+ categorical encoding and structure</li>
+<li>
+<strong>Python Interoperability</strong>: Seamless data exchange with Python’s scanpy, muon, and mudata ecosystems</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
+</h2>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="co"># Install dependencies</span></span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">requireNamespace</span>(<span class="st">"remotes"</span>, <span class="at">quietly =</span> <span class="cn">TRUE</span>)) {</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>  <span class="fu">install.packages</span>(<span class="st">"remotes"</span>)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>}</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="co"># Install from GitHub</span></span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>remotes<span class="sc">::</span><span class="fu">install_github</span>(<span class="st">"mianaz/seuratdisk-V5"</span>)</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="co"># Or install locally from source</span></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>R CMD INSTALL .</span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="usage">Usage<a class="anchor" aria-label="anchor" href="#usage"></a>
+</h2>
+<div class="section level3">
+<h3 id="basic-operations">Basic Operations<a class="anchor" aria-label="anchor" href="#basic-operations"></a>
+</h3>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://mojaveazure.github.io/seurat-disk/" class="external-link">SeuratDisk</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Save Seurat object to h5Seurat format</span></span>
+<span><span class="fu"><a href="reference/SaveH5Seurat.html">SaveH5Seurat</a></span><span class="op">(</span><span class="va">seurat_obj</span>, filename <span class="op">=</span> <span class="st">"data.h5Seurat"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Load h5Seurat file</span></span>
+<span><span class="va">seurat_obj</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/LoadH5Seurat.html">LoadH5Seurat</a></span><span class="op">(</span><span class="st">"data.h5Seurat"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Convert to h5ad for Python/scanpy</span></span>
+<span><span class="fu"><a href="reference/Convert.html">Convert</a></span><span class="op">(</span><span class="st">"data.h5Seurat"</span>, dest <span class="op">=</span> <span class="st">"data.h5ad"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="working-with-anndata-files">Working with AnnData Files<a class="anchor" aria-label="anchor" href="#working-with-anndata-files"></a>
+</h3>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Load h5ad directly into Seurat (recommended for V5)</span></span>
+<span><span class="va">seurat_obj</span> <span class="op">&lt;-</span> <span class="fu">LoadH5AD</span><span class="op">(</span><span class="st">"scanpy_output.h5ad"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Convert h5ad to h5Seurat</span></span>
+<span><span class="fu"><a href="reference/Convert.html">Convert</a></span><span class="op">(</span><span class="st">"data.h5ad"</span>, dest <span class="op">=</span> <span class="st">"data.h5Seurat"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="working-with-multimodal-data-h5mu">Working with Multimodal Data (H5MU)<a class="anchor" aria-label="anchor" href="#working-with-multimodal-data-h5mu"></a>
+</h3>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Load multimodal h5mu file (CITE-seq, multiome, etc.)</span></span>
+<span><span class="va">seurat_obj</span> <span class="op">&lt;-</span> <span class="fu">LoadH5MU</span><span class="op">(</span><span class="st">"multimodal_data.h5mu"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Load specific modalities only</span></span>
+<span><span class="va">seurat_obj</span> <span class="op">&lt;-</span> <span class="fu">LoadH5MU</span><span class="op">(</span><span class="st">"data.h5mu"</span>, modalities <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rna"</span>, <span class="st">"prot"</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Save multimodal Seurat object to h5mu</span></span>
+<span><span class="fu">SaveH5MU</span><span class="op">(</span><span class="va">seurat_obj</span>, <span class="st">"output.h5mu"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Convert between formats</span></span>
+<span><span class="fu"><a href="reference/Convert.html">Convert</a></span><span class="op">(</span><span class="st">"data.h5mu"</span>, dest <span class="op">=</span> <span class="st">"data.h5Seurat"</span><span class="op">)</span>  <span class="co"># h5mu → h5Seurat</span></span>
+<span><span class="fu"><a href="reference/Convert.html">Convert</a></span><span class="op">(</span><span class="st">"data.h5Seurat"</span>, dest <span class="op">=</span> <span class="st">"data.h5mu"</span><span class="op">)</span>  <span class="co"># h5Seurat → h5mu</span></span>
+<span><span class="fu"><a href="reference/Convert.html">Convert</a></span><span class="op">(</span><span class="st">"data.h5mu"</span>, dest <span class="op">=</span> <span class="st">"rna_only.h5ad"</span><span class="op">)</span>  <span class="co"># Extract single modality</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="spatial-transcriptomics">Spatial Transcriptomics<a class="anchor" aria-label="anchor" href="#spatial-transcriptomics"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Load a Visium h5ad created with scanpy</span></span>
+<span><span class="va">brain</span> <span class="op">&lt;-</span> <span class="fu">LoadH5AD</span><span class="op">(</span><span class="st">"visium_brain.h5ad"</span>, assay.name <span class="op">=</span> <span class="st">"Spatial"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Inspect reconstructed spatial images</span></span>
+<span><span class="fu">Images</span><span class="op">(</span><span class="va">brain</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Plot a gene straight away</span></span>
+<span><span class="fu">SpatialFeaturePlot</span><span class="op">(</span><span class="va">brain</span>, features <span class="op">=</span> <span class="st">"PTPRC"</span>, images <span class="op">=</span> <span class="fu">Images</span><span class="op">(</span><span class="va">brain</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span><span class="op">)</span></span></code></pre></div>
+<p>When present, low- and high-resolution Visium images, scalefactors, and spot coordinates are restored directly from the AnnData file, enabling immediate use of standard Seurat spatial workflows.</p>
+</div>
+<div class="section level3">
+<h3 id="layer-handling">Layer Handling<a class="anchor" aria-label="anchor" href="#layer-handling"></a>
+</h3>
+<p>Seurat V5 supports multiple data layers per assay (counts, data, scale.data). These are mapped as follows:</p>
+<p><strong>In h5Seurat files:</strong> - Stored under <code>/assays/{assay_name}/layers/{layer_name}</code> - Each layer is a separate HDF5 group/dataset</p>
+<p><strong>In h5ad files:</strong> - Primary layer (typically <code>data</code> or <code>scale.data</code>) stored as <code>/X</code> - Raw counts stored as <code>/raw/X</code> (if available) - Additional assay layers stored in <code>/layers/{assay_name}</code></p>
+<p><strong>Conversion behavior:</strong> - h5Seurat → h5ad: <code>data</code> layer becomes <code>/X</code>, <code>counts</code> becomes <code>/raw/X</code> - h5ad → Seurat: <code>/X</code> becomes <code>data</code> layer, <code>/raw/X</code> becomes <code>counts</code> - Missing layers are handled gracefully (e.g., counts-only objects supported)</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="system-requirements">System Requirements<a class="anchor" aria-label="anchor" href="#system-requirements"></a>
+</h2>
+<ul>
+<li>R &gt;= 4.0.0</li>
+<li>Seurat &gt;= 5.0.0</li>
+<li>SeuratObject &gt;= 5.0.0</li>
+<li>hdf5r &gt;= 1.3.0</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="improvements-in-this-fork">Improvements in This Fork<a class="anchor" aria-label="anchor" href="#improvements-in-this-fork"></a>
+</h2>
+<div class="section level3">
+<h3 id="v5-compatibility">V5 Compatibility<a class="anchor" aria-label="anchor" href="#v5-compatibility"></a>
+</h3>
+<ul>
+<li>Native Assay5 object handling with layer-based data storage</li>
+<li>Patched hdf5r methods for improved multidimensional array access</li>
+<li>Support for counts-only objects (data layer optional)</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="anndata-format-updates">AnnData Format Updates<a class="anchor" aria-label="anchor" href="#anndata-format-updates"></a>
+</h3>
+<ul>
+<li>Modern categorical encoding (<code>categories</code>/<code>codes</code> instead of <code>__categories</code>)</li>
+<li>Proper encoding attributes for anndata 0.8+ compatibility</li>
+<li>Complete metadata group structure (<code>obsm</code>, <code>obsp</code>, <code>varm</code>, <code>varp</code>, <code>layers</code>, <code>uns</code>)</li>
+<li>Correct <code>shape</code> attributes for sparse matrices</li>
+<li>Visium spatial libraries are reconstructed into fully functional <code>VisiumV2</code> images inside Seurat</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="bug-fixes">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes"></a>
+</h3>
+<ul>
+<li>Fixed V5 metadata transfer issues</li>
+<li>Corrected dimension handling for 1D/2D feature datasets</li>
+<li>Improved error handling for missing data layers</li>
+</ul>
+</div>
+</div>
+<div class="section level2">
+<h2 id="known-limitations">Known Limitations<a class="anchor" aria-label="anchor" href="#known-limitations"></a>
+</h2>
+<ul>
+<li>Round-trip conversions (h5Seurat ↔︎ Seurat ↔︎ h5Seurat) may lose some V5-specific metadata</li>
+<li>H5MU multimodal support requires MuDataSeurat package (automatically installed from GitHub)</li>
+<li>Spatial data in h5mu format is stored per-modality; full Visium reconstruction is in development</li>
+<li>Visium hires imagery is embedded inside the Seurat object; raw TIFF/PNG assets are not exported automatically</li>
+<li>Large datasets (&gt;100K cells) may require substantial memory</li>
+</ul>
+</div>
+<div class="section level2">
+<h2 id="troubleshooting">Troubleshooting<a class="anchor" aria-label="anchor" href="#troubleshooting"></a>
+</h2>
+<div class="section level3">
+<h3 id="hdf5-method-patching">HDF5 Method Patching<a class="anchor" aria-label="anchor" href="#hdf5-method-patching"></a>
+</h3>
+<p>If you see warnings about H5D method patching:</p>
+<pre><code>Error patching H5D methods: no method found for function '[' and signature H5D</code></pre>
+<p>This is expected if hdf5r methods are not yet loaded. The package uses fallback methods automatically.</p>
+</div>
+<div class="section level3">
+<h3 id="memory-management">Memory Management<a class="anchor" aria-label="anchor" href="#memory-management"></a>
+</h3>
+<p>For large datasets:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Monitor memory usage</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/gc.html" class="external-link">gc</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Windows only: increase memory limit</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/memory.size.html" class="external-link">memory.limit</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">32000</span><span class="op">)</span></span></code></pre></div>
+</div>
+</div>
+<div class="section level2">
+<h2 id="upstream-reference">Upstream Reference<a class="anchor" aria-label="anchor" href="#upstream-reference"></a>
+</h2>
+<p>This fork is based on the original SeuratDisk package by <a href="https://github.com/mojaveazure/seurat-disk" class="external-link">mojaveazure</a>. The original repository may no longer be actively maintained. This fork focuses specifically on Seurat V5 compatibility and modern AnnData format support.</p>
+</div>
+<div class="section level2">
+<h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
+</h2>
+<p>If you use SeuratDisk in published research, please cite the relevant Seurat papers:</p>
+<pre><code>Hao and Hao et al. (2024) Dictionary learning for integrative, multimodal and
+scalable single-cell analysis. Nature Biotechnology. [Seurat V5]
+
+Hao et al. (2021) Integrated analysis of multimodal single-cell data.
+Cell, 184(13), 3573-3587. [Seurat V4]</code></pre>
+</div>
+<div class="section level2">
+<h2 id="contributing">Contributing<a class="anchor" aria-label="anchor" href="#contributing"></a>
+</h2>
+<p>Contributions are welcome. Key areas for improvement: - Enhanced multi-modal assay support - Spatial transcriptomics integration - Performance optimization for very large datasets - Additional file format conversions</p>
+</div>
+<div class="section level2">
+<h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
+</h2>
+<p>GPL-3 (inherited from original SeuratDisk)</p>
+</div>
+<div class="section level2">
+<h2 id="support">Support<a class="anchor" aria-label="anchor" href="#support"></a>
+</h2>
+<p>For issues related to V5 compatibility or this fork, please open an issue in this repository. For general Seurat questions, visit the <a href="https://github.com/satijalab/seurat/discussions" class="external-link">Seurat discussions</a>.</p>
 </div>
 </div>
   </div>
 
   <div class="col-md-3 hidden-xs hidden-sm" id="pkgdown-sidebar">
     <div class="links">
-<h2>Links</h2>
+<h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li>Browse source code at <br><a href="https://github.com/mojaveazure/seurat-disk/">https://​github.com/​mojaveazure/​seurat-disk/​</a>
-</li>
-<li>Report a bug at <br><a href="https://github.com/mojaveazure/seurat-disk/issues">https://​github.com/​mojaveazure/​seurat-disk/​issues</a>
-</li>
-</ul>
-</div>
-<div class="license">
-<h2>License</h2>
-<ul class="list-unstyled">
-<li>
-<a href="https://www.r-project.org/Licenses/GPL-3">GPL-3</a> | file <a href="LICENSE-text.html">LICENSE</a>
-</li>
-</ul>
-</div>
-<div class="developers">
-<h2>Developers</h2>
-<ul class="list-unstyled">
-<li>Paul Hoffman <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-7693-8957" target="orcid.widget" aria-label="ORCID"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a> </li>
-<li><a href="authors.html">All authors...</a></li>
+<li><a href="https://github.com/mojaveazure/seurat-disk/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/mojaveazure/seurat-disk/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
-  <div class="dev-status">
-<h2>Dev status</h2>
+<div class="license">
+<h2 data-toc-skip>License</h2>
 <ul class="list-unstyled">
-<li><a href="https://cran.r-project.org/package=SeuratDisk"><img src="https://img.shields.io/cran/v/SeuratDisk" alt="CRAN/METACRAN"></a></li>
-<li><a href="https://github.com/mojaveazure/seurat-disk"><img src="https://img.shields.io/badge/lifecycle-experimental-orange.svg" alt="Lifecycle"></a></li>
+<li>
+<a href="https://www.r-project.org/Licenses/GPL-3" class="external-link">GPL-3</a> | file <a href="LICENSE-text.html">LICENSE</a>
+</li>
 </ul>
 </div>
+
+
+<div class="citation">
+<h2 data-toc-skip>Citation</h2>
+<ul class="list-unstyled">
+<li><a href="authors.html#citation">Citing SeuratDisk</a></li>
+</ul>
 </div>
+
+<div class="developers">
+<h2 data-toc-skip>Developers</h2>
+<ul class="list-unstyled">
+<li>Paul Hoffman <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0002-7693-8957" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
+<li><a href="authors.html">More about authors...</a></li>
+</ul>
+</div>
+
+
+
+  </div>
 </div>
 
 
       <footer><div class="copyright">
-  <p>Developed by Paul Hoffman.</p>
+  <p></p>
+<p>Developed by Paul Hoffman.</p>
 </div>
 
 <div class="pkgdown">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/">pkgdown</a> 1.5.1.</p>
+  <p></p>
+<p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
 </div>
 
       </footer>
 </div>
 
-  
+
+
+
 
 
   </body>

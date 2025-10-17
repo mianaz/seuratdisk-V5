@@ -128,7 +128,7 @@ SafeSetLayerData <- function(object, layer, value) {
       # Fall back to slot assignment if LayerData<- exists but fails
     })
   }
-  
+
   # Fall back to direct slot assignment
   tryCatch({
     if (inherits(object, "Assay5")) {
@@ -145,6 +145,35 @@ SafeSetLayerData <- function(object, layer, value) {
   }, error = function(e) {
     warning("Could not set layer data: ", e$message)
     return(object)  # Return unchanged object as last resort
+  })
+}
+
+# Helper function to safely get graphs from a Seurat object
+# This handles the case where Graphs() might not be exported from Seurat
+SafeGraphs <- function(object) {
+  # Try using the Graphs function if it exists in Seurat
+  if (exists("Graphs", where = asNamespace("Seurat"), mode = "function")) {
+    tryCatch({
+      Graphs <- getFromNamespace("Graphs", "Seurat")
+      return(Graphs(object = object))
+    }, error = function(e) {
+      # If Graphs exists but fails, fall through to alternative methods
+    })
+  }
+
+  # Fallback: try to access graphs slot directly
+  tryCatch({
+    if (inherits(object, "Seurat")) {
+      # Try to get graph names from the object's graphs slot
+      if (.hasSlot(object, "graphs")) {
+        return(names(object@graphs))
+      }
+    }
+    # No graphs found
+    return(character(0))
+  }, error = function(e) {
+    # Ultimate fallback - return empty vector
+    return(character(0))
   })
 }
 

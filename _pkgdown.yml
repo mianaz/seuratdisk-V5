@@ -22,6 +22,12 @@ reference:
       - Connect
       - Convert
       - matches("SCDisk")
+  - title: Loom File Support
+    contents:
+      - LoadLoom
+      - SaveLoom
+      - loom-class
+      - loom-bindings
   - title: Utility Functions
     contents:
       - ReadH5

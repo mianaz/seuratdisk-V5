@@ -36,12 +36,12 @@ Imports:
   rlang (>= 0.4.4),
   Seurat (>= 5.0.0),
   SeuratObject (>= 5.0.0),
-  MuDataSeurat,
   stats,
   stringi (>= 1.4.6),
   tools,
   utils,
-  withr (>= 2.1.2)
+  withr (>= 2.1.2),
+  MuDataSeurat
 Collate:
     'zzz.R'
     'GetObject.R'
@@ -64,17 +64,17 @@ Collate:
     'loom.R'
     'loom_bindings.R'
     'LoadLoom.R'
+    'LoadSpatialDemoData.R'
     'ReadH5.R'
-    'WriteH5Group.R'
     'SaveH5MU.R'
+    'WriteH5Group.R'
     'SaveH5Seurat.R'
     'SaveLoom.R'
+    'SpatialConversion.R'
+    'SpatialFOV.R'
     'V5Compatibility.R'
     'V5LayerSupport.R'
     'h5Seurat_bindings.R'
-    'SpatialConversion.R'
-    'SpatialFOV.R'
-    'LoadSpatialDemoData.R'
 Suggests:
     httr,
     knitr,

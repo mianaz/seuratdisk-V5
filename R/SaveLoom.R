@@ -32,6 +32,8 @@ as.loom <- function(x, ...) {
   UseMethod(generic = 'as.loom', object = x)
 }
 
+#' @keywords internal
+#' @noRd
 setGeneric(
   name = 'WriteMatrix',
   def = function(x, name, lfile, transpose = TRUE, verbose = TRUE) {
@@ -136,13 +138,30 @@ as.loom.default <- function(x, filename, overwrite = FALSE, verbose = TRUE) {
 #' @export
 #'
 as.loom.H5File <- function(x, ...) {
-  .NotYetImplemented()
+  # Validate that this is a loom file
+  if (!inherits(x = x, what = 'H5File')) {
+    stop("'x' must be an H5File object", call. = FALSE)
+  }
+  # Check for required loom structure
+  if (!x$exists(name = 'matrix')) {
+    stop("H5File does not contain required '/matrix' dataset", call. = FALSE)
+  }
+  required.groups <- c('layers', 'row_attrs', 'col_attrs')
+  for (group in required.groups) {
+    if (!x$exists(name = group)) {
+      stop("H5File does not contain required '", group, "' group", call. = FALSE)
+    }
+  }
+  # Wrap the H5File in a loom object
+  loom.obj <- loom$new(
+    filename = x$filename,
+    mode = ifelse(test = x$get_file_id()$is_writeable(), yes = 'r+', no = 'r')
+  )
+  return(loom.obj)
 }
 
 #' @importFrom tools file_ext
-#' @importFrom Seurat Assays
-#' DefaultAssay
-#' GetAssayData
+#' @importFrom Seurat Assays DefaultAssay GetAssayData Reductions Embeddings Loadings Stdev
 #'
 #' @rdname SaveLoom
 #' @method as.loom Seurat
@@ -231,9 +250,56 @@ as.loom.Seurat <- function(
     )
     AddSlots(assay = assay)
   }
-  # TODO: add dimensional reduction information
+  # Add dimensional reduction information
+  if (length(Reductions(object = x)) > 0) {
+    # Create parent reductions group first
+    if (!lfile$exists('reductions')) {
+      lfile$create_group(name = 'reductions')
+    }
+  }
+  for (reduc in Reductions(object = x)) {
+    tryCatch({
+      if (verbose) {
+        message("Adding dimensional reduction ", reduc)
+      }
+      reduc.obj <- x[[reduc]]
+      # Create a group for this reduction
+      reduc.group <- lfile$create_group(name = H5Path('reductions', reduc))
+      # Save embeddings (transpose to match loom convention: components x cells)
+      embeddings <- Embeddings(object = reduc.obj)
+      lfile$create_dataset(
+        name = H5Path('reductions', reduc, 'embeddings'),
+        robj = t(x = embeddings),
+        dtype = GuessDType(x = embeddings[1, 1])
+      )
+      # Save loadings if available
+      loadings <- tryCatch(Loadings(object = reduc.obj), error = function(e) NULL)
+      if (!is.null(x = loadings) && !IsMatrixEmpty(x = loadings)) {
+        lfile$create_dataset(
+          name = H5Path('reductions', reduc, 'loadings'),
+          robj = loadings,
+          dtype = GuessDType(x = loadings[1, 1])
+        )
+      }
+      # Save standard deviation if available
+      stdev <- tryCatch(Stdev(object = reduc.obj), error = function(e) NULL)
+      if (!is.null(x = stdev) && length(x = stdev) > 0) {
+        lfile$create_dataset(
+          name = H5Path('reductions', reduc, 'stdev'),
+          robj = stdev,
+          dtype = GuessDType(x = stdev)
+        )
+      }
+    }, error = function(e) {
+      warning(
+        "Failed to save dimensional reduction ", reduc, ": ", e$message,
+        call. = FALSE,
+        immediate. = TRUE
+      )
+    })
+  }
   # Add graphs
-  for (graph in Graphs(object = x)) {
+  for (graph in SafeGraphs(object = x)) {
     lfile$add_graph(x = x[[graph]], name = graph, type = 'col')
   }
   # Add metadata
@@ -241,8 +307,32 @@ as.loom.Seurat <- function(
   for (md in names(x = x[[]])) {
     lfile$add_attribute(x = x[[md, drop = TRUE]], name = md, type = 'col')
   }
-  # TODO: Add feature-level metadata
+  # Add feature-level metadata
   lfile$add_attribute(x = rownames(x = x), name = 'Gene', type = 'row')
+  # Add feature metadata from the default assay
+  default.assay <- DefaultAssay(object = x)
+  if (!is.null(x = default.assay) && default.assay %in% Assays(object = x)) {
+    feature.meta <- x[[default.assay]][[]]
+    if (ncol(x = feature.meta) > 0) {
+      for (feat.md in colnames(x = feature.meta)) {
+        tryCatch({
+          lfile$add_attribute(
+            x = feature.meta[[feat.md]],
+            name = feat.md,
+            type = 'row'
+          )
+        }, error = function(e) {
+          if (verbose) {
+            warning(
+              "Failed to save feature metadata '", feat.md, "': ", e$message,
+              call. = FALSE,
+              immediate. = TRUE
+            )
+          }
+        })
+      }
+    }
+  }
   return(lfile)
 }
 
@@ -250,7 +340,8 @@ as.loom.Seurat <- function(
 #' @importFrom hdf5r H5S
 #' @importFrom methods slot
 #' @importFrom utils setTxtProgressBar
-#'
+#' @keywords internal
+#' @noRd
 setMethod(
   f = 'WriteMatrix',
   signature = c('x' = 'dgCMatrix'),
@@ -293,6 +384,8 @@ setMethod(
   }
 )
 
+#' @keywords internal
+#' @noRd
 setMethod(
   f = 'WriteMatrix',
   signature = c('x' = 'matrix'),

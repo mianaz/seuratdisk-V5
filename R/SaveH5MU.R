@@ -367,9 +367,7 @@ PrepareSpatialForH5MU <- function(object, assays, modality.names, verbose = FALS
 
   # Store spatial data in misc for MuDataSeurat to pick up
   # This is a placeholder - full implementation would integrate with
-  # the modality-specific obs
-
-m/uns structure
+  # the modality-specific obs/uns structure
 
   for (img_name in images) {
     img_obj <- object[[img_name]]
