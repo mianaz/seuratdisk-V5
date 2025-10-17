@@ -11,11 +11,13 @@ SeuratDisk provides interfaces for HDF5-based single cell file formats, enabling
 ## Key Features
 
 - **Seurat V5 Support**: Native handling of Seurat V5 Assay5 objects and layered data structures
-- **Format Conversion**: Bidirectional conversion between Seurat, h5Seurat, and h5ad formats
+- **Format Conversion**: Bidirectional conversion between Seurat, h5Seurat, h5ad, and h5mu formats
+- **Multimodal Data Support**: Full h5mu (MuData) format support for CITE-seq, multiome, and other multimodal datasets
 - **Direct h5ad Loading**: Load AnnData h5ad files directly into Seurat without intermediate conversion
 - **Spatial Visium Support**: Automatically rebuilds Visium spatial images, scalefactors, and coordinates when reading h5ad files
 - **Metadata Preservation**: Complete transfer of cell/gene metadata, dimensional reductions, and graphs
 - **Modern AnnData Compatibility**: Supports anndata 0.8+ categorical encoding and structure
+- **Python Interoperability**: Seamless data exchange with Python's scanpy, muon, and mudata ecosystems
 
 ## Installation
 
@@ -57,6 +59,24 @@ seurat_obj <- LoadH5AD("scanpy_output.h5ad")
 
 # Convert h5ad to h5Seurat
 Convert("data.h5ad", dest = "data.h5Seurat")
+```
+
+### Working with Multimodal Data (H5MU)
+
+```r
+# Load multimodal h5mu file (CITE-seq, multiome, etc.)
+seurat_obj <- LoadH5MU("multimodal_data.h5mu")
+
+# Load specific modalities only
+seurat_obj <- LoadH5MU("data.h5mu", modalities = c("rna", "prot"))
+
+# Save multimodal Seurat object to h5mu
+SaveH5MU(seurat_obj, "output.h5mu")
+
+# Convert between formats
+Convert("data.h5mu", dest = "data.h5Seurat")  # h5mu → h5Seurat
+Convert("data.h5Seurat", dest = "data.h5mu")  # h5Seurat → h5mu
+Convert("data.h5mu", dest = "rna_only.h5ad")  # Extract single modality
 ```
 
 ### Spatial Transcriptomics
@@ -121,7 +141,8 @@ Seurat V5 supports multiple data layers per assay (counts, data, scale.data). Th
 ## Known Limitations
 
 - Round-trip conversions (h5Seurat ↔ Seurat ↔ h5Seurat) may lose some V5-specific metadata
-- Multi-modal assays with different feature dimensions have limited support
+- H5MU multimodal support requires MuDataSeurat package (automatically installed from GitHub)
+- Spatial data in h5mu format is stored per-modality; full Visium reconstruction is in development
 - Visium hires imagery is embedded inside the Seurat object; raw TIFF/PNG assets are not exported automatically
 - Large datasets (>100K cells) may require substantial memory
 

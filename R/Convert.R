@@ -122,6 +122,35 @@ Convert.H5File <- function(
       ),
       stop("Unable to convert H5AD files to ", dtype, " files", call. = FALSE)
     ),
+    'h5mu' = switch(
+      EXPR = dtype,
+      'h5seurat' = H5MUToH5Seurat(
+        source = source,
+        dest = dest,
+        assay = assay,
+        overwrite = overwrite,
+        verbose = verbose
+      ),
+      'h5ad' = H5MUToH5AD(
+        source = source,
+        dest = dest,
+        modality = assay,
+        overwrite = overwrite,
+        verbose = verbose
+      ),
+      stop("Unable to convert H5MU files to ", dtype, " files", call. = FALSE)
+    ),
+    'h5seurat' = switch(
+      EXPR = dtype,
+      'h5mu' = H5SeuratToH5MU(
+        source = source,
+        dest = dest,
+        assay = assay,
+        overwrite = overwrite,
+        verbose = verbose
+      ),
+      stop("Unable to convert h5Seurat files to ", dtype, " files", call. = FALSE)
+    ),
     stop("Unknown file type: ", stype, call. = FALSE)
   )
   return(dfile)
@@ -2204,9 +2233,150 @@ H5SeuratToH5AD <- function(
 }
 
 
+#' Convert H5MU files to h5Seurat files
+#'
+#' @inheritParams Convert
+#'
+#' @return Returns a handle to \code{dest} as an \code{\link{h5Seurat}} object
+#'
+#' @keywords internal
+#'
+H5MUToH5Seurat <- function(
+  source,
+  dest,
+  assay = 'RNA',
+  overwrite = FALSE,
+  verbose = TRUE
+) {
+  if (verbose) {
+    message("Converting H5MU to h5Seurat via Seurat object...")
+  }
+
+  # Load h5mu file as Seurat object
+  seurat_obj <- LoadH5MU(
+    file = source$filename,
+    verbose = verbose
+  )
+
+  # Save as h5Seurat
+  h5seurat_file <- SaveH5Seurat(
+    object = seurat_obj,
+    filename = dest,
+    overwrite = overwrite,
+    verbose = verbose
+  )
+
+  # Return h5Seurat connection
+  dfile <- h5Seurat$new(filename = dest, mode = 'r')
+  return(dfile)
+}
+
+
+#' Convert h5Seurat files to H5MU files
+#'
+#' @inheritParams Convert
+#'
+#' @return Returns a handle to \code{dest} as an \code{\link[hdf5r]{H5File}} object
+#'
+#' @keywords internal
+#'
+H5SeuratToH5MU <- function(
+  source,
+  dest,
+  assay = DefaultAssay(object = source),
+  overwrite = FALSE,
+  verbose = TRUE
+) {
+  if (verbose) {
+    message("Converting h5Seurat to H5MU via Seurat object...")
+  }
+
+  # Load h5Seurat as Seurat object
+  seurat_obj <- LoadH5Seurat(
+    file = source$filename,
+    verbose = verbose
+  )
+
+  # Save as h5mu
+  h5mu_file <- SaveH5MU(
+    object = seurat_obj,
+    filename = dest,
+    overwrite = overwrite,
+    verbose = verbose
+  )
+
+  # Return H5File connection to h5mu
+  dfile <- H5File$new(filename = dest, mode = 'r')
+  return(dfile)
+}
+
+
+#' Convert H5MU files to H5AD files (extract single modality)
+#'
+#' @inheritParams Convert
+#' @param modality Name of modality to extract from h5mu file
+#'
+#' @return Returns a handle to \code{dest} as an \code{\link[hdf5r]{H5File}} object
+#'
+#' @keywords internal
+#'
+H5MUToH5AD <- function(
+  source,
+  dest,
+  modality = 'rna',
+  overwrite = FALSE,
+  verbose = TRUE
+) {
+  if (verbose) {
+    message("Extracting modality '", modality, "' from H5MU to H5AD...")
+  }
+
+  # Load h5mu file
+  seurat_obj <- LoadH5MU(
+    file = source$filename,
+    modalities = modality,
+    verbose = verbose
+  )
+
+  # Get the corresponding assay name
+  assay_names <- Assays(seurat_obj)
+  if (length(assay_names) == 0) {
+    stop("No assays found in converted object", call. = FALSE)
+  }
+
+  # Use first assay (should be the only one if modality was specified)
+  target_assay <- assay_names[1]
+
+  # Save as h5Seurat first
+  temp_h5seurat <- tempfile(fileext = ".h5seurat")
+  on.exit(file.remove(temp_h5seurat), add = TRUE)
+
+  SaveH5Seurat(
+    object = seurat_obj,
+    filename = temp_h5seurat,
+    overwrite = TRUE,
+    verbose = FALSE
+  )
+
+  # Convert h5Seurat to h5ad
+  temp_h5seurat_conn <- Connect(filename = temp_h5seurat, force = TRUE)
+  dfile <- H5SeuratToH5AD(
+    source = temp_h5seurat_conn,
+    dest = dest,
+    assay = target_assay,
+    overwrite = overwrite,
+    verbose = verbose
+  )
+
+  temp_h5seurat_conn$close_all()
+
+  return(dfile)
+}
+
+
 # Read obs meta data from h5ad file and return a data.frame
 #' @export
-#' 
+#'
 readH5AD_obs <- function(file) {
   suppressWarnings(expr = hfile <- SeuratDisk:: Connect(filename = file, force = TRUE))
   hfile_obs <- hfile[['obs']]

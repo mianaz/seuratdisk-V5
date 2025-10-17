@@ -13,15 +13,17 @@ Description: The h5Seurat file format is specifically designed for the storage
   all molecular information and associated metadata, including (for example)
   nearest-neighbor graphs, dimensional reduction information, spatial
   coordinates and image data, and cluster labels. We also support rapid and
-  on-disk conversion between h5Seurat and AnnData objects, with the goal of
-  enhancing interoperability between Seurat and Scanpy.
+  on-disk conversion between h5Seurat, AnnData, and MuData (h5mu) objects, with
+  the goal of enhancing interoperability between Seurat, Scanpy, and Muon.
 URL: https://mojaveazure.github.io/seurat-disk/, https://github.com/mojaveazure/seurat-disk
 BugReports: https://github.com/mojaveazure/seurat-disk/issues
 License: GPL-3 | file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
-Remotes: satijalab/seurat-data
+Remotes:
+  satijalab/seurat-data,
+  PMBio/MuDataSeurat
 Depends:
   R (>= 3.6.0)
 Imports:
@@ -34,6 +36,7 @@ Imports:
   rlang (>= 0.4.4),
   Seurat (>= 5.0.0),
   SeuratObject (>= 5.0.0),
+  MuDataSeurat,
   stats,
   stringi (>= 1.4.6),
   tools,
@@ -56,12 +59,14 @@ Collate:
     'Convert.R'
     'H5DAccess.R'
     'LoadH5AD.R'
+    'LoadH5MU.R'
     'LoadH5Seurat.R'
     'loom.R'
     'loom_bindings.R'
     'LoadLoom.R'
     'ReadH5.R'
     'WriteH5Group.R'
+    'SaveH5MU.R'
     'SaveH5Seurat.R'
     'SaveLoom.R'
     'V5Compatibility.R'
