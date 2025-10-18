@@ -1,7 +1,8 @@
 #' @include zzz.R
 #' @importFrom hdf5r h5attr
 #' @importFrom methods slot<- new
-#' @importFrom Seurat Cells Key<- Key Cells
+#' @importFrom Seurat Cells Key<- Key Cells scalefactors
+#' @importFrom SeuratObject CreateFOV CreateCentroids
 #'
 NULL
 
@@ -481,7 +482,8 @@ AssembleAssay <- function(assay, file, slots = NULL, verbose = TRUE) {
     tryCatch({
       # Try to set misc slot if it exists
       if ('misc' %in% slotNames(obj)) {
-        slot(object = obj, name = 'misc') <- as.list(x = assay.group[['misc']], recursive = TRUE)
+        # Use SafeH5GroupToList to handle 3D+ arrays
+        slot(object = obj, name = 'misc') <- SafeH5GroupToList(h5obj = assay.group[['misc']], recursive = TRUE)
       } else {
         if (verbose) {
           message("Misc slot not available in this assay type (Assay5), skipping")
@@ -639,7 +641,8 @@ AssembleDimReduc <- function(reduction, file, verbose = TRUE) {
     if (verbose) {
       message("Adding miscellaneous information for ", reduction)
     }
-    slot(object = obj, name = 'misc') <- as.list(x = reduc.group[['misc']], recursive = TRUE)
+    # Use SafeH5GroupToList to handle 3D+ arrays (e.g., from Squidpy UMAP)
+    slot(object = obj, name = 'misc') <- SafeH5GroupToList(h5obj = reduc.group[['misc']], recursive = TRUE)
   }
   # Add jackstraw
   if (index[[assay]]$reductions[[reduction]][['jackstraw']]) {
@@ -677,13 +680,272 @@ AssembleGraph <- function(graph, file, verbose = TRUE) {
 #'
 AssembleImage <- function(image, file, verbose = TRUE) {
   index <- file$index()
-  obj <- as.list(x = file[['images']][[image]], recursive = TRUE, row.names = Cells(x = file))
-  if (file[['images']][[image]]$attr_exists(attr_name = 'assay')) {
-    assay <- h5attr(x = file[['images']][[image]], which = 'assay')
-    if (image %in% index[[assay]]$images) {
-      DefaultAssay(object = obj) <- assay
-    }
+  img_group <- file[['images']][[image]]
+
+  # Get assay information
+  assay <- if (img_group$attr_exists(attr_name = 'assay')) {
+    h5attr(x = img_group, which = 'assay')
+  } else {
+    'Spatial'  # Default assay name for spatial data
   }
+
+  # Get s4class to determine object type
+  s4class <- if (img_group$attr_exists(attr_name = 's4class')) {
+    h5attr(x = img_group, which = 's4class')
+  } else {
+    NULL
+  }
+
+  # Try to construct a proper Seurat spatial image object (VisiumV1/VisiumV2)
+  # if we have the necessary components
+  if (!is.null(s4class) && s4class %in% c('VisiumV1', 'VisiumV2')) {
+    tryCatch({
+      # Get image data
+      image_data <- NULL
+      if (img_group$exists(name = 'image')) {
+        image_data <- img_group[['image']]$read()
+        # Ensure proper format (should already be channels x width x height)
+        if (length(dim(image_data)) == 3L) {
+          # Normalize to 0-1 range if needed
+          if (max(image_data) > 1) {
+            image_data <- image_data / 255
+          }
+          storage.mode(image_data) <- 'double'
+        }
+      }
+
+      # Get scale factors
+      scale_factors <- NULL
+      if (img_group$exists(name = 'scale.factors')) {
+        sf_group <- img_group[['scale.factors']]
+
+        # Read scale factor values
+        spot <- if (sf_group$exists('spot')) sf_group[['spot']][] else NA_real_
+        fiducial <- if (sf_group$exists('fiducial')) sf_group[['fiducial']][] else NA_real_
+        hires <- if (sf_group$exists('hires')) sf_group[['hires']][] else NA_real_
+        lowres <- if (sf_group$exists('lowres')) sf_group[['lowres']][] else NA_real_
+
+        # Create scalefactors object
+        scale_factors <- tryCatch({
+          scalefactors(
+            spot = as.numeric(spot),
+            fiducial = as.numeric(fiducial),
+            hires = as.numeric(hires),
+            lowres = as.numeric(lowres)
+          )
+        }, error = function(e) {
+          if (verbose) {
+            message("Could not create scalefactors object: ", conditionMessage(e))
+          }
+          NULL
+        })
+      }
+
+      # Get spatial coordinates and boundaries - different for VisiumV1 vs VisiumV2
+      coordinates <- NULL
+      boundaries_list <- list()
+
+      # Try boundaries/centroids (VisiumV2 style)
+      if (img_group$exists(name = 'boundaries')) {
+        boundaries_group <- img_group[['boundaries']]
+        if (boundaries_group$exists(name = 'centroids')) {
+          centroids_group <- boundaries_group[['centroids']]
+
+          # Read all centroids data
+          if (centroids_group$exists(name = 'coords')) {
+            if (verbose) {
+              message("Reading spatial coordinates from boundaries/centroids")
+            }
+
+            coords_mat <- centroids_group[['coords']][,]
+            cell_names <- if (centroids_group$exists('cells')) {
+              as.character(centroids_group[['cells']][])
+            } else {
+              Cells(x = file)
+            }
+
+            # Read centroid parameters
+            radius_val <- if (centroids_group$exists('radius')) {
+              centroids_group[['radius']][]
+            } else {
+              as.numeric(scale_factors[['spot']])
+            }
+
+            theta_val <- if (centroids_group$exists('theta')) {
+              centroids_group[['theta']][]
+            } else {
+              0
+            }
+
+            nsides_val <- if (centroids_group$exists('nsides')) {
+              centroids_group[['nsides']][]
+            } else {
+              8L
+            }
+
+            # Create Centroids object using SeuratObject function
+            tryCatch({
+              # Ensure coords has proper column names and rownames
+              if (is.null(colnames(coords_mat))) {
+                colnames(coords_mat) <- c('x', 'y')
+              }
+
+              # Set rownames to cell names - CreateCentroids uses rownames for cells
+              if (length(cell_names) == nrow(coords_mat)) {
+                rownames(coords_mat) <- cell_names
+              }
+
+              centroids_obj <- SeuratObject::CreateCentroids(
+                coords = coords_mat,
+                nsides = as.integer(nsides_val),
+                radius = as.numeric(radius_val),
+                theta = as.numeric(theta_val)
+              )
+
+              boundaries_list[['centroids']] <- centroids_obj
+
+              if (verbose) {
+                message("Created Centroids object with ", nrow(coords_mat), " cells")
+              }
+            }, error = function(e) {
+              if (verbose) {
+                message("Could not create Centroids object: ", conditionMessage(e))
+              }
+            })
+          }
+        }
+      }
+
+      # For VisiumV1, try reductions/spatial for coordinates dataframe
+      if (s4class == 'VisiumV1' && file$exists(name = 'reductions/spatial')) {
+        if (verbose) {
+          message("Reading spatial coordinates from reduction for VisiumV1")
+        }
+        spatial_reduc <- file[['reductions/spatial']]
+        if (spatial_reduc$exists(name = 'cell.embeddings')) {
+          coords_mat <- as.matrix(spatial_reduc[['cell.embeddings']])
+
+          # Create coordinate dataframe for VisiumV1
+          coordinates <- data.frame(
+            imagerow = coords_mat[, 2],  # Y coordinate
+            imagecol = coords_mat[, 1],  # X coordinate
+            row.names = Cells(x = file),
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+
+      # Get key
+      image_key <- if (img_group$exists(name = 'key')) {
+        img_group[['key']][]
+      } else {
+        paste0(image, '_')
+      }
+
+      # Only attempt to create a full Visium object if we have the required components
+      can_create_v2 <- !is.null(image_data) && !is.null(scale_factors) && length(boundaries_list) > 0
+      can_create_v1 <- !is.null(image_data) && !is.null(scale_factors) && !is.null(coordinates)
+
+      if (s4class == 'VisiumV2' && can_create_v2) {
+        # VisiumV2 object
+        if (verbose) {
+          n_cells <- if (!is.null(boundaries_list$centroids)) {
+            length(slot(boundaries_list$centroids, 'cells'))
+          } else {
+            0
+          }
+          message("Creating VisiumV2 object with ", n_cells, " spots")
+        }
+
+        tryCatch({
+          obj <- new(
+            Class = 'VisiumV2',
+            image = image_data,
+            scale.factors = scale_factors,
+            molecules = list(),  # Empty molecules
+            boundaries = boundaries_list,
+            assay = assay,
+            key = image_key
+          )
+          return(obj)
+        }, error = function(e) {
+          if (verbose) {
+            message("Error creating VisiumV2 object: ", conditionMessage(e))
+          }
+        })
+      } else if (s4class == 'VisiumV1' && can_create_v1) {
+        # VisiumV1 - simpler structure with coordinates dataframe
+        if (verbose) {
+          message("Creating VisiumV1 object with ", nrow(coordinates), " spots")
+        }
+
+        tryCatch({
+          obj <- new(
+            Class = 'VisiumV1',
+            image = image_data,
+            scale.factors = scale_factors,
+            coordinates = coordinates,
+            spot.radius = as.numeric(scale_factors[['spot']]) / 2,
+            assay = assay,
+            key = image_key
+          )
+          return(obj)
+        }, error = function(e) {
+          if (verbose) {
+            message("Error creating VisiumV1 object: ", conditionMessage(e))
+          }
+        })
+      }
+
+      # If we get here, we couldn't create a full object
+      if (verbose) {
+        message("Could not create full ", s4class, " object, falling back to list")
+      }
+    }, error = function(e) {
+      if (verbose) {
+        message("Error creating Visium object: ", conditionMessage(e))
+        message("Falling back to simple list structure")
+      }
+    })
+  }
+
+  # Fallback: Use simple list structure (original behavior)
+  obj <- tryCatch({
+    as.list(x = img_group, recursive = TRUE, row.names = Cells(x = file))
+  }, error = function(e) {
+    if (verbose) {
+      message("Standard as.list failed for image, using safe conversion: ", conditionMessage(e))
+    }
+    SafeH5GroupToList(h5obj = img_group, recursive = TRUE)
+  })
+
+  # Try to set assay attribute
+  tryCatch({
+    # Check if image is in the index - wrap in tryCatch to handle structured objects
+    if (!is.null(index[[assay]]$images) && image %in% index[[assay]]$images) {
+      tryCatch({
+        DefaultAssay(object = obj) <- assay
+      }, error = function(e) {
+        if (verbose) {
+          message("Note: Setting assay as attribute instead of DefaultAssay")
+        }
+        attr(obj, 'assay') <- assay
+      })
+    } else {
+      # If not in index or index check failed, just set assay attribute
+      if (verbose) {
+        message("Setting assay as attribute for image")
+      }
+      attr(obj, 'assay') <- assay
+    }
+  }, error = function(e) {
+    # If the index check itself fails, just set the assay attribute
+    if (verbose) {
+      message("Could not check image index, setting assay as attribute: ", conditionMessage(e))
+    }
+    attr(obj, 'assay') <- assay
+  })
+
   return(obj)
 }
 

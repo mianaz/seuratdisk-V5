@@ -295,11 +295,32 @@ as.Seurat.h5Seurat <- function(
       if (verbose) {
         message("Adding image ", image)
       }
-      object[[image]] <- AssembleImage(
-        image = image,
-        file = x,
-        verbose = verbose
-      )
+      tryCatch({
+        img_obj <- AssembleImage(
+          image = image,
+          file = x,
+          verbose = verbose
+        )
+        object[[image]] <- img_obj
+      }, error = function(e) {
+        if (verbose) {
+          message("Could not add image ", image, " to Seurat object: ", conditionMessage(e))
+          message("Storing image in misc slot instead")
+        }
+        # Store in misc slot as fallback
+        tryCatch({
+          img_obj <- AssembleImage(
+            image = image,
+            file = x,
+            verbose = verbose
+          )
+          slot(object = object, name = 'misc')[[paste0('image_', image)]] <<- img_obj
+        }, error = function(e2) {
+          if (verbose) {
+            message("Failed to store image in misc: ", conditionMessage(e2))
+          }
+        })
+      })
     }
   }
   # Load SeuratCommands
@@ -358,14 +379,16 @@ as.Seurat.h5Seurat <- function(
     if (verbose) {
       message("Adding miscellaneous information")
     }
-    slot(object = object, name = 'misc') <- as.list(x = x[['misc']], recursive = TRUE)
+    # Use SafeH5GroupToList to handle 3D+ arrays
+    slot(object = object, name = 'misc') <- SafeH5GroupToList(h5obj = x[['misc']], recursive = TRUE)
   }
   # Load tools
   if (tools) {
     if (verbose) {
       message("Adding tool-specific results")
     }
-    slot(object = object, name = 'tools') <- as.list(x = x[['tools']], recursive = TRUE)
+    # Use SafeH5GroupToList to handle 3D+ arrays
+    slot(object = object, name = 'tools') <- SafeH5GroupToList(h5obj = x[['tools']], recursive = TRUE)
   }
   # Load no.assay information
   if (obj.all && !is.null(x = index$no.assay)) {

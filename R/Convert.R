@@ -652,6 +652,39 @@ H5ADToH5Seurat <- function(
       dtype = GuessDType(x = 'Cell1')
     )
   }
+
+  # Restore Seurat-specific metadata from uns['seurat'] if available
+  if (source$exists(name = 'uns/seurat')) {
+    if (verbose) {
+      message("Restoring Seurat-specific metadata from uns['seurat']")
+    }
+
+    seurat_group <- source[['uns/seurat']]
+
+    # Check if this file was originally from Seurat
+    if (seurat_group$exists(name = 'version')) {
+      version_info <- seurat_group[['version']][]
+      if (verbose) {
+        message("  Found Seurat metadata from ", version_info)
+      }
+    }
+
+    # Restore original assay name if different from current
+    if (seurat_group$exists(name = 'assay_name')) {
+      original_assay <- seurat_group[['assay_name']][]
+      if (original_assay != assay && verbose) {
+        message("  Original assay name was '", original_assay, "', now using '", assay, "'")
+      }
+    }
+
+    # Note: Graph names are stored for reference, but graphs themselves
+    # will be restored from uns/neighbors/distances in the existing code
+    if (seurat_group$exists(name = 'graph_names') && verbose) {
+      graph_names <- seurat_group[['graph_names']][]
+      message("  Original graph names: ", paste(graph_names, collapse = ", "))
+    }
+  }
+
   # Add dimensional reduction information
   if (source$exists(name = 'obsm')) {
     # Add cell embeddings
@@ -837,11 +870,14 @@ H5ADToH5Seurat <- function(
       )
       dfile[['graphs']][[graph.name]]$attr_delete(attr_name = 'shape')
     }
-    dfile[['graphs']][[graph.name]]$create_attr(
-      attr_name = 'assay.used',
-      robj = assay,
-      dtype = GuessDType(x = assay)
-    )
+    # Only create assay.used attribute if it doesn't already exist
+    if (!isTRUE(x = AttrExists(x = dfile[['graphs']][[graph.name]], name = 'assay.used'))) {
+      dfile[['graphs']][[graph.name]]$create_attr(
+        attr_name = 'assay.used',
+        robj = assay,
+        dtype = GuessDType(x = assay)
+      )
+    }
   }
   # Add miscellaneous information
   if (source$exists(name = 'uns')) {
@@ -858,6 +894,158 @@ H5ADToH5Seurat <- function(
         src_name = i,
         dst_name = i
       )
+    }
+  }
+  # Add spatial images from uns/spatial
+  if (source$exists(name = 'uns/spatial')) {
+    if (verbose) {
+      message("Adding spatial images from uns/spatial")
+    }
+    spatial_uns <- source[['uns/spatial']]
+    library_ids <- names(x = spatial_uns)
+
+    for (lib_id in library_ids) {
+      lib_group <- spatial_uns[[lib_id]]
+
+      # Check if images exist for this library
+      if (lib_group$exists(name = 'images')) {
+        images_group <- lib_group[['images']]
+        image_types <- names(x = images_group)
+
+        # Create image group in h5seurat (using library_id as image name)
+        # Remove illegal characters from library_id for use as image name
+        img_name <- gsub(pattern = '[^A-Za-z0-9_]', replacement = '_', x = lib_id)
+
+        if (verbose) {
+          message("  Processing library '", lib_id, "' as image '", img_name, "'")
+        }
+
+        # Create image group if it doesn't exist
+        if (!dfile[['images']]$exists(name = img_name)) {
+          img_h5 <- dfile[['images']]$create_group(name = img_name)
+
+          # Add required attributes for image indexing
+          # assay attribute
+          img_h5$create_attr(
+            attr_name = 'assay',
+            robj = assay,  # Use the assay parameter
+            dtype = GuessDType(x = assay)
+          )
+
+          # s4class attribute (VisiumV1 is a safe default for spatial data)
+          img_h5$create_attr(
+            attr_name = 's4class',
+            robj = 'VisiumV1',
+            dtype = GuessDType(x = 'VisiumV1')
+          )
+
+          # global attribute (make image globally available)
+          img_h5$create_attr(
+            attr_name = 'global',
+            robj = 1L,  # Use integer 1 for TRUE
+            dtype = GuessDType(x = 1L)
+          )
+        } else {
+          img_h5 <- dfile[['images']][[img_name]]
+        }
+
+        # Add key dataset (required by Seurat)
+        if (!img_h5$exists(name = 'key')) {
+          img_h5$create_dataset(
+            name = 'key',
+            robj = paste0(img_name, '_'),
+            dtype = GuessDType(x = paste0(img_name, '_'))
+          )
+        }
+
+        # Store lowres as the primary 'image' dataset (used for visualization)
+        # Note: hires can be added later if needed
+        if ('lowres' %in% image_types) {
+          if (verbose) {
+            message("    Adding lowres as primary image")
+          }
+
+          # Read lowres image data from h5ad
+          img_data <- images_group[['lowres']]$read()
+
+          # Check if this is a 3D array (height x width x channels)
+          if (length(dim(img_data)) == 3L) {
+            # Transpose from h5ad format (height, width, channels) to
+            # h5seurat format (channels, width, height)
+            img_arr <- aperm(img_data, c(3L, 2L, 1L))
+
+            # Write to h5seurat as 'image' dataset
+            if (img_h5$exists(name = 'image')) {
+              img_h5$link_delete(name = 'image')
+            }
+            img_h5$create_dataset(
+              name = 'image',
+              robj = img_arr,
+              dtype = GuessDType(x = img_arr)
+            )
+          } else {
+            if (verbose) {
+              message("      Warning: Lowres image is not a 3D array, skipping")
+            }
+          }
+        } else if ('hires' %in% image_types) {
+          # Fallback to hires if lowres not available
+          if (verbose) {
+            message("    Adding hires as primary image (lowres not available)")
+          }
+
+          img_data <- images_group[['hires']]$read()
+          if (length(dim(img_data)) == 3L) {
+            img_arr <- aperm(img_data, c(3L, 2L, 1L))
+            if (img_h5$exists(name = 'image')) {
+              img_h5$link_delete(name = 'image')
+            }
+            img_h5$create_dataset(
+              name = 'image',
+              robj = img_arr,
+              dtype = GuessDType(x = img_arr)
+            )
+          }
+        }
+
+        # Add scale factors if available
+        if (lib_group$exists(name = 'scalefactors')) {
+          if (verbose) {
+            message("    Adding scale factors")
+          }
+
+          # Create scale.factors group
+          if (img_h5$exists(name = 'scale.factors')) {
+            img_h5$link_delete(name = 'scale.factors')
+          }
+          sf_group <- img_h5$create_group(name = 'scale.factors')
+
+          # Map from h5ad names to h5seurat names
+          sf_map <- c(
+            tissue_hires_scalef = 'hires',
+            tissue_lowres_scalef = 'lowres',
+            spot_diameter_fullres = 'spot',
+            fiducial_diameter_fullres = 'fiducial'
+          )
+
+          sf_src <- lib_group[['scalefactors']]
+          for (sf_h5ad_name in names(x = sf_src)) {
+            # Find corresponding h5seurat name
+            sf_h5seurat_name <- names(sf_map)[sf_map == sf_h5ad_name]
+            if (length(sf_h5seurat_name) == 0) {
+              # If no mapping found, use the h5ad name directly
+              sf_h5seurat_name <- sf_h5ad_name
+            }
+
+            sf_value <- sf_src[[sf_h5ad_name]]$read()
+            sf_group$create_dataset(
+              name = sf_h5seurat_name,
+              robj = sf_value,
+              dtype = GuessDType(x = sf_value)
+            )
+          }
+        }
+      }
     }
   }
   # Add layers to the RNA assay (V5 style)
@@ -1897,8 +2085,54 @@ H5SeuratToH5AD <- function(
     }
   }
 
-  # Create uns
-  dfile$create_group(name = 'uns')
+  # Create uns if it doesn't exist
+  if (!dfile$exists(name = 'uns')) {
+    dfile$create_group(name = 'uns')
+  }
+
+  # Preserve Seurat-specific metadata in uns['seurat']
+  if (verbose) {
+    message("Preserving Seurat-specific metadata in uns['seurat']")
+  }
+  seurat_group <- dfile[['uns']]$create_group(name = 'seurat')
+
+  # Store assay name
+  seurat_group$create_dataset(
+    name = 'assay_name',
+    robj = assay,
+    dtype = h5types$H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+  )
+
+  # Store SeuratDisk version
+  seurat_group$create_dataset(
+    name = 'version',
+    robj = 'SeuratDisk-V5',
+    dtype = h5types$H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+  )
+
+  # Preserve graph names if they exist
+  if (source$exists(name = 'graphs')) {
+    graph_names <- names(x = source[['graphs']])
+    if (length(graph_names) > 0) {
+      seurat_group$create_dataset(
+        name = 'graph_names',
+        robj = graph_names,
+        dtype = h5types$H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+      )
+    }
+  }
+
+  # Preserve obs column names to track which metadata came from Seurat
+  if (dfile$exists(name = 'obs')) {
+    if (dfile[['obs']]$attr_exists(attr_name = 'column-order')) {
+      obs_cols <- h5attr(x = dfile[['obs']], which = 'column-order')
+      seurat_group$create_dataset(
+        name = 'obs_columns',
+        robj = obs_cols,
+        dtype = h5types$H5T_STRING$new(size = Inf)$set_cset(cset = h5const$H5T_CSET_UTF8)
+      )
+    }
+  }
 
   # Add spatial metadata to uns if available
   if (source$exists(name = 'images')) {

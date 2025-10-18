@@ -30,29 +30,11 @@ Meta
 # Ignore test files
 test_*
 *_test.*
-roundtrip_*
-full_v5_*
-rna_only_*
-v4_test.*
 
 # Ignore temporary debugging files
 debug_*
 temp_*
 temp_files/
 
-# Ignore internal documentation
-**/CLAUDE.local.md
-CLAUDE.md
-EDGE_CASES_ANALYSIS.md
-V5_COMPATIBILITY_ANALYSIS.md
-PACKAGE_STATUS.md
-agents.md
-**/REFACTORING_STATUS.md
-**/PHASE*_FIXES*.md
-**/h5seurat_refactoring_plan.md
-
 # Ignore large test data files (keep test scripts)
-tests/*.rds
-tests/*.h5ad
-tests/*.h5seurat
-tests/*.h5Seurat
+tests/results/

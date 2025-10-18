@@ -8,35 +8,25 @@
 
 SeuratDisk provides interfaces for HDF5-based single cell file formats, enabling efficient storage and conversion between Seurat objects and AnnData/h5ad formats. This fork extends the original [SeuratDisk package](https://github.com/mojaveazure/seurat-disk) with full Seurat V5 compatibility and improved interoperability with Python's scanpy/anndata ecosystem.
 
-## Key Features
-
-- **Seurat V5 Support**: Native handling of Seurat V5 Assay5 objects and layered data structures
-- **Format Conversion**: Bidirectional conversion between Seurat, h5Seurat, h5ad, and h5mu formats
-- **Multimodal Data Support**: Full h5mu (MuData) format support for CITE-seq, multiome, and other multimodal datasets
-- **Direct h5ad Loading**: Load AnnData h5ad files directly into Seurat without intermediate conversion
-- **Spatial Visium Support**: Automatically rebuilds Visium spatial images, scalefactors, and coordinates when reading h5ad files
-- **Metadata Preservation**: Complete transfer of cell/gene metadata, dimensional reductions, and graphs
-- **Modern AnnData Compatibility**: Supports anndata 0.8+ categorical encoding and structure
-- **Python Interoperability**: Seamless data exchange with Python's scanpy, muon, and mudata ecosystems
+The h5Seurat file format is specifically designed for the storage and analysis of multi-modal single-cell and spatially-resolved expression experiments, for example, from CITE-seq or 10X Visium technologies. It holds all molecular information and associated metadata, including (for example) nearest-neighbor graphs, dimensional reduction information, spatial coordinates and image data, and cluster labels. We also support rapid and on-disk conversion between h5Seurat and AnnData objects, with the goal of enhancing interoperability between Seurat and Scanpy.
 
 ## Installation
 
+SeuratDisk is not currently available on CRAN. You can install it from GitHub with:
+
 ```r
-# Install dependencies
 if (!requireNamespace("remotes", quietly = TRUE)) {
   install.packages("remotes")
 }
 
-# Install from GitHub
 remotes::install_github("mianaz/seuratdisk-V5")
-
-# Or install locally from source
-R CMD INSTALL .
 ```
 
 ## Usage
 
 ### Basic Operations
+
+#### Seurat to H5AD
 
 ```r
 library(SeuratDisk)
@@ -51,17 +41,17 @@ seurat_obj <- LoadH5Seurat("data.h5Seurat")
 Convert("data.h5Seurat", dest = "data.h5ad")
 ```
 
-### Working with AnnData Files
+### H5AD to Seurat
 
 ```r
-# Load h5ad directly into Seurat (recommended for V5)
-seurat_obj <- LoadH5AD("scanpy_output.h5ad")
-
 # Convert h5ad to h5Seurat
 Convert("data.h5ad", dest = "data.h5Seurat")
+
+# Load h5Seurat as Seurat object
+seurat_obj <- LoadH5Seurat("data.h5Seurat")
 ```
 
-### Working with Multimodal Data (H5MU)
+### Seurat (multimodal) to H5MU
 
 ```r
 # Load multimodal h5mu file (CITE-seq, multiome, etc.)
@@ -76,7 +66,7 @@ SaveH5MU(seurat_obj, "output.h5mu")
 # Convert between formats
 Convert("data.h5mu", dest = "data.h5Seurat")  # h5mu → h5Seurat
 Convert("data.h5Seurat", dest = "data.h5mu")  # h5Seurat → h5mu
-Convert("data.h5mu", dest = "rna_only.h5ad")  # Extract single modality
+Convert("data.h5mu", dest = "rna_only.h5ad", assay="rna")  # Extract single modality
 ```
 
 ### Spatial Transcriptomics

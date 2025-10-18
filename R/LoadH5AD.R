@@ -131,7 +131,46 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
     stop("No expression matrix (X) found in h5ad file", call. = FALSE)
   }
 
-  expr_matrix <- ReadH5ADMatrix(h5ad[["X"]], transpose = TRUE)
+  # Determine if we need to transpose by checking matrix orientation
+  # Standard h5ad: X is (n_obs x n_var) = (cells x features)
+  # Seurat needs: (n_features x n_cells) = (features x cells)
+  X_obj <- h5ad[["X"]]
+
+  # Get actual matrix dimensions
+  if (inherits(X_obj, "H5Group") && X_obj$attr_exists("shape")) {
+    # Sparse matrix
+    X_dims <- h5attr(X_obj, "shape")
+    X_nrows <- X_dims[1]
+    X_ncols <- X_dims[2]
+  } else if (inherits(X_obj, "H5D")) {
+    # Dense matrix
+    X_nrows <- X_obj$dims[1]
+    X_ncols <- X_obj$dims[2]
+  } else {
+    stop("Cannot determine X matrix dimensions", call. = FALSE)
+  }
+
+  # Compare with obs/var counts to determine orientation
+  n_obs <- length(cell.names)
+  n_var <- length(feature.names)
+
+  # Decide whether to transpose
+  # If X is already (features x cells), don't transpose
+  # If X is (cells x features), transpose
+  needs_transpose <- TRUE
+  if (X_nrows == n_var && X_ncols == n_obs) {
+    # Matrix is already (features x cells)
+    needs_transpose <- FALSE
+    if (verbose) message("  Matrix is already in (features x cells) format, no transpose needed")
+  } else if (X_nrows == n_obs && X_ncols == n_var) {
+    # Matrix is (cells x features), needs transpose
+    needs_transpose <- TRUE
+    if (verbose) message("  Matrix is in (cells x features) format, transposing to (features x cells)")
+  } else {
+    warning("Matrix dimensions don't match obs/var counts. Using default transpose.", immediate. = TRUE)
+  }
+
+  expr_matrix <- ReadH5ADMatrix(X_obj, transpose = needs_transpose)
 
   # Handle dimension mismatches
   if (nrow(expr_matrix) != length(feature.names)) {
@@ -141,6 +180,28 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
   if (ncol(expr_matrix) != length(cell.names)) {
     warning("Adjusting cell names to match matrix dimensions", immediate. = TRUE)
     cell.names <- cell.names[seq_len(ncol(expr_matrix))]
+  }
+
+  # Handle NA values in names
+  if (any(is.na(feature.names))) {
+    warning("NA values detected in feature names. Replacing with generic names.", immediate. = TRUE)
+    na_idx <- which(is.na(feature.names))
+    feature.names[na_idx] <- paste0("Feature", na_idx)
+  }
+  if (any(is.na(cell.names))) {
+    warning("NA values detected in cell names. Replacing with generic names.", immediate. = TRUE)
+    na_idx <- which(is.na(cell.names))
+    cell.names[na_idx] <- paste0("Cell", na_idx)
+  }
+
+  # Make feature and cell names unique to avoid rowname/colname conflicts
+  if (any(duplicated(feature.names))) {
+    warning("Duplicate feature names detected. Making unique.", immediate. = TRUE)
+    feature.names <- make.unique(feature.names)
+  }
+  if (any(duplicated(cell.names))) {
+    warning("Duplicate cell names detected. Making unique.", immediate. = TRUE)
+    cell.names <- make.unique(cell.names)
   }
 
   rownames(expr_matrix) <- feature.names
@@ -160,6 +221,17 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
   if (h5ad$exists("raw") && h5ad[["raw"]]$exists("X")) {
     if (verbose) message("Adding raw counts...")
 
+    # Get raw cell names
+    raw_cells <- NULL
+    if (h5ad[["raw"]]$exists("obs")) {
+      raw_obs <- h5ad[["raw/obs"]]
+      if (raw_obs$exists("_index")) {
+        raw_cells <- as.character(raw_obs[["_index"]][])
+      } else if (raw_obs$exists("index")) {
+        raw_cells <- as.character(raw_obs[["index"]][])
+      }
+    }
+
     raw_features <- NULL
     if (h5ad[["raw"]]$exists("var")) {
       raw_var <- h5ad[["raw/var"]]
@@ -176,17 +248,45 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
       # Match dimensions
       raw_features <- raw_features[seq_len(min(length(raw_features), nrow(raw_matrix)))]
       rownames(raw_matrix) <- raw_features
-      colnames(raw_matrix) <- cell.names
 
-      # Find common features
-      common_features <- intersect(feature.names, raw_features)
-      if (length(common_features) > 0) {
-        raw_subset <- raw_matrix[common_features, , drop = FALSE]
-        seurat_obj[[assay.name]] <- SetAssayData(
-          object = seurat_obj[[assay.name]],
-          layer = "counts",
-          new.data = raw_subset
-        )
+      # Set column names based on raw_cells or match to cell.names
+      if (!is.null(raw_cells) && ncol(raw_matrix) == length(raw_cells)) {
+        colnames(raw_matrix) <- raw_cells
+        # Find common cells between raw and filtered
+        common_cells <- intersect(cell.names, raw_cells)
+        if (length(common_cells) > 0) {
+          # Subset raw matrix to match current cells
+          raw_matrix <- raw_matrix[, common_cells, drop = FALSE]
+        } else {
+          # No overlap, skip raw counts
+          if (verbose) message("  No overlapping cells between raw and main matrix. Skipping raw counts.")
+          raw_matrix <- NULL
+        }
+      } else if (ncol(raw_matrix) == length(cell.names)) {
+        # Same number of cells, assume same order
+        colnames(raw_matrix) <- cell.names
+      } else {
+        # Dimension mismatch and no cell names - skip
+        if (verbose) message("  Raw matrix dimensions don't match. Skipping raw counts.")
+        raw_matrix <- NULL
+      }
+
+      # Add raw counts to assay if we have a valid matrix
+      if (!is.null(raw_matrix)) {
+        # Find common features
+        common_features <- intersect(feature.names, rownames(raw_matrix))
+        if (length(common_features) > 0) {
+          # Ensure we're only using cells that exist in the Seurat object
+          common_cells_final <- intersect(cell.names, colnames(raw_matrix))
+          if (length(common_cells_final) > 0) {
+            raw_subset <- raw_matrix[common_features, common_cells_final, drop = FALSE]
+            seurat_obj[[assay.name]] <- SetAssayData(
+              object = seurat_obj[[assay.name]],
+              layer = "counts",
+              new.data = raw_subset
+            )
+          }
+        }
       }
     }
   }
@@ -238,25 +338,35 @@ LoadH5AD <- function(file, assay.name = "RNA", verbose = TRUE) {
     for (col in obs_cols) {
       if (verbose) message("  Adding metadata: ", col)
 
-      # Check if categorical
-      is_categorical <- FALSE
-      if (obs_group$exists("__categories") && col %in% names(obs_group[["__categories"]])) {
-        is_categorical <- TRUE
-        codes <- obs_group[[col]][]
-        categories <- as.character(obs_group[["__categories"]][[col]][])
-        # h5ad uses -1 for NA in categorical
-        codes[codes == -1] <- NA
-        meta_values <- factor(categories[codes + 1], levels = categories)
-      } else {
-        # Numeric or string
-        meta_values <- obs_group[[col]][]
-        if (is.character(meta_values)) {
-          meta_values <- as.character(meta_values)
+      tryCatch({
+        # Skip if it's a group (not a dataset)
+        if (!inherits(obs_group[[col]], "H5D")) {
+          if (verbose) message("    Skipping (not a dataset)")
+          next
         }
-      }
 
-      # Add to Seurat object
-      seurat_obj[[col]] <- meta_values
+        # Check if categorical
+        is_categorical <- FALSE
+        if (obs_group$exists("__categories") && col %in% names(obs_group[["__categories"]])) {
+          is_categorical <- TRUE
+          codes <- obs_group[[col]][]
+          categories <- as.character(obs_group[["__categories"]][[col]][])
+          # h5ad uses -1 for NA in categorical
+          codes[codes == -1] <- NA
+          meta_values <- factor(categories[codes + 1], levels = categories)
+        } else {
+          # Numeric or string
+          meta_values <- obs_group[[col]][]
+          if (is.character(meta_values)) {
+            meta_values <- as.character(meta_values)
+          }
+        }
+
+        # Add to Seurat object
+        seurat_obj[[col]] <- meta_values
+      }, error = function(e) {
+        if (verbose) warning("  Could not add metadata ", col, ": ", e$message, immediate. = TRUE)
+      })
     }
   }
 
