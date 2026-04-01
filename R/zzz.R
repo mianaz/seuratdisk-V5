@@ -1020,8 +1020,9 @@ SafeSetLayerData <- function(object, layer, value) {
         on.exit(unlink(temp), add = TRUE)
         SaveH5Seurat(object = obj_write, filename = temp, overwrite = TRUE, verbose = FALSE)
         h5s <- Connect(filename = temp, force = TRUE)
-        H5SeuratToH5AD(source = h5s, dest = filename, assay = assay_name,
+        h5ad_file <- H5SeuratToH5AD(source = h5s, dest = filename, assay = assay_name,
                         overwrite = overwrite, verbose = verbose, ...)
+        h5ad_file$close_all()
         h5s$close_all()
         rm(obj_write)  # free placeholder copy
 
@@ -1094,8 +1095,9 @@ SafeSetLayerData <- function(object, layer, value) {
         on.exit(unlink(temp), add = TRUE)
         SaveH5Seurat(object = object, filename = temp, overwrite = TRUE, verbose = FALSE)
         h5s <- Connect(filename = temp, force = TRUE)
-        H5SeuratToH5AD(source = h5s, dest = filename, assay = assay_name,
+        h5ad_file <- H5SeuratToH5AD(source = h5s, dest = filename, assay = assay_name,
                         overwrite = overwrite, verbose = verbose, ...)
+        h5ad_file$close_all()
         h5s$close_all()
       }
       invisible(filename)
