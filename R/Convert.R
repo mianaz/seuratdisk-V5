@@ -2757,7 +2757,11 @@ H5SeuratToH5AD <- function(
         }
 
         # Transfer metadata columns
+        # Access the underlying HDF5 group directly to avoid V5 environment wrappers
         meta_group <- source[['meta.data']]
+        if (is.environment(x = meta_group) && exists("hgroup", envir = meta_group, inherits = FALSE)) {
+          meta_group <- get("hgroup", envir = meta_group, inherits = FALSE)
+        }
         if (inherits(x = meta_group, what = 'H5Group')) {
           for (col in names(x = meta_group)) {
             if (col == '__categories' || col == '_index') next
@@ -2910,9 +2914,27 @@ H5SeuratToH5AD <- function(
         index = index,
         name_map_fn = map_fn
       )
+      # Add dataframe encoding attributes (required by anndata)
+      encoding.info <- c('type' = 'dataframe', 'version' = '0.2.0')
+      names(x = encoding.info) <- paste0('encoding-', names(x = encoding.info))
+      for (i in seq_along(along.with = encoding.info)) {
+        attr.name <- names(x = encoding.info)[i]
+        attr.value <- encoding.info[i]
+        if (dfile[[dname]]$attr_exists(attr_name = attr.name)) {
+          dfile[[dname]]$attr_delete(attr_name = attr.name)
+        }
+        dfile[[dname]]$create_attr(
+          attr_name = attr.name,
+          robj = attr.value,
+          dtype = GuessDType(x = attr.value),
+          space = H5S$new(type = "scalar")
+        )
+      }
     } else if (inherits(x = src, what = 'H5Group')) {
       dfile$create_group(name = dname)
       for (i in src$names) {
+        # Skip internal HDF5 entries
+        if (i %in% c('__categories', '_index')) next
         # Apply name mapping if standardize is enabled
         mapped_i <- apply_name_map(i, dname)
 
@@ -3523,21 +3545,26 @@ H5SeuratToH5AD <- function(
       dfile$create_group(name = 'obs')
 
       # Try to read metadata directly from h5Seurat structure
-      if (inherits(x = meta.src, what = 'H5Group')) {
+      # Unwrap V5 environment wrappers if present
+      meta.src.unwrapped <- meta.src
+      if (is.environment(x = meta.src.unwrapped) && exists("hgroup", envir = meta.src.unwrapped, inherits = FALSE)) {
+        meta.src.unwrapped <- get("hgroup", envir = meta.src.unwrapped, inherits = FALSE)
+      }
+      if (inherits(x = meta.src.unwrapped, what = 'H5Group')) {
         # Get all column names except internal ones
-        meta_cols <- setdiff(names(x = meta.src), c('__categories', '_index'))
+        meta_cols <- setdiff(names(x = meta.src.unwrapped), c('__categories', '_index'))
 
         for (col in meta_cols) {
           tryCatch({
-            if (IsFactor(x = meta.src[[col]])) {
+            if (IsFactor(x = meta.src.unwrapped[[col]])) {
               # Use newer anndata format: each categorical is a group with categories/codes
               dfile[['obs']]$create_group(name = col)
 
               # Convert codes to 0-based indices, handling NA values
               # R factor codes are 1-based; h5ad uses 0-based with -1 for missing
-              raw_codes <- meta.src[[col]][['values']][]
+              raw_codes <- meta.src.unwrapped[[col]][['values']][]
               codes_values <- ifelse(is.na(raw_codes), -1L, raw_codes - 1L)
-              n_categories <- length(meta.src[[col]][['levels']][])
+              n_categories <- length(meta.src.unwrapped[[col]][['levels']][])
               has_na <- any(is.na(raw_codes))
 
               # Choose appropriate integer dtype based on number of categories
@@ -3578,7 +3605,7 @@ H5SeuratToH5AD <- function(
               # Add categories dataset
               dfile[['obs']][[col]]$create_dataset(
                 name = 'categories',
-                robj = as.character(meta.src[[col]][['levels']][]),
+                robj = as.character(meta.src.unwrapped[[col]][['levels']][]),
                 dtype = StringType('utf8')
               )
 
@@ -3619,8 +3646,8 @@ H5SeuratToH5AD <- function(
               # Handle regular columns
               dfile[['obs']]$create_dataset(
                 name = col,
-                robj = meta.src[[col]][],
-                dtype = meta.src[[col]]$get_type()
+                robj = meta.src.unwrapped[[col]][],
+                dtype = meta.src.unwrapped[[col]]$get_type()
               )
 
               # Add encoding attributes
